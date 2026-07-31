@@ -1,0 +1,65 @@
+{
+  "workspace": {
+    "shared_dir": ".at/shared",
+    "agents_dir": ".at/shared/agents",
+    "sessions_dir": ".at/sessions",
+    "projects_dir": ".at/projects"
+  },
+  "pipeline": [
+    "main",
+    "analysis",
+    "code",
+    "test"
+  ],
+  "providers": {
+    "mock": {
+      "type": "mock"
+    },
+    "codex": {
+      "type": "process",
+      "command": [
+        "codex"
+      ],
+      "prompt_mode": "stdin",
+      "cwd": "workspace",
+      "env_policy": "minimal",
+      "env_passthrough": [
+        "PATH",
+        "PATHEXT",
+        "SystemRoot",
+        "ComSpec",
+        "TEMP",
+        "TMP",
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "LANG"
+      ],
+      "timeout_seconds": 1800
+    },
+    "opencode": {
+      "type": "process",
+      "command": [
+        "opencode"
+      ],
+      "prompt_mode": "stdin",
+      "cwd": "workspace",
+      "env_policy": "minimal",
+      "env_passthrough": [
+        "PATH",
+        "PATHEXT",
+        "SystemRoot",
+        "ComSpec",
+        "TEMP",
+        "TMP",
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "LANG"
+      ],
+      "timeout_seconds": 1800
+    }
+  }
+}

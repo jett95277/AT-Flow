@@ -1,0 +1,14 @@
+.at/
+.codex-analysis/
+baize-system/
+baize-claude-extracted/
+baize-claude-extracted.zip
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+dist/
+build/
+*.egg-info/
