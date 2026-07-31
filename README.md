@@ -132,13 +132,19 @@ python .\at.py status <session-id>
 
 ```powershell
 $env:PYTHONPATH = "src"
-python -m at_flow enable --target "G:\AT-test"
+python -m at_flow enable --target "<project-root>"
 ```
 
 安装为 Python 包后：
 
 ```powershell
-at enable --target "G:\AT-test"
+at enable --target "<project-root>"
+```
+
+如果已经在目标项目根目录中，也可以使用：
+
+```powershell
+at enable --target .
 ```
 
 `enable` 会在目标项目中完成两件事：
