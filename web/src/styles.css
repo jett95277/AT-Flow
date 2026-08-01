@@ -201,6 +201,26 @@ h4 {
   margin-top: 10px;
 }
 
+.provider-select {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.provider-select span {
+  color: #52616f;
+  font-size: 12px;
+}
+
+.provider-select select {
+  background: #ffffff;
+  border: 1px solid #c9d4df;
+  border-radius: 6px;
+  color: #24313f;
+  min-height: 32px;
+  padding: 4px 8px;
+}
+
 .control-grid {
   display: grid;
   gap: 8px;

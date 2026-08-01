@@ -26,6 +26,7 @@ export function AppShell({ client }: AppShellProps) {
   const [documentContent, setDocumentContent] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState("mock");
 
   useEffect(() => {
     Promise.all([client.getHealth(), client.getSessions(), client.getWorkspaceTree()])
@@ -98,7 +99,7 @@ export function AppShell({ client }: AppShellProps) {
 
   function createSession() {
     client
-      .createSession({ task: "Web 控制台演示任务", provider: "mock" })
+      .createSession({ task: "Web 控制台演示任务", provider: selectedProvider })
       .then((response) => {
         if (response.session) {
           setActiveSession(response.session);
@@ -135,6 +136,8 @@ export function AppShell({ client }: AppShellProps) {
           <h2>运行时检查器</h2>
           <RunControls
             activeSessionId={activeSession?.id ?? null}
+            selectedProvider={selectedProvider}
+            onProviderChange={setSelectedProvider}
             onCreateSession={createSession}
             onRunOneStep={(sessionId) => runCommand(client.runOneStep.bind(client), sessionId)}
             onContinue={(sessionId) => runCommand(client.continueSession.bind(client), sessionId)}

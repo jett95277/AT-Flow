@@ -1,5 +1,7 @@
 type RunControlsProps = {
   activeSessionId: string | null;
+  selectedProvider: string;
+  onProviderChange: (provider: string) => void;
   onCreateSession: () => void;
   onRunOneStep: (sessionId: string) => void;
   onContinue: (sessionId: string) => void;
@@ -7,8 +9,16 @@ type RunControlsProps = {
   onRefreshDoctor: () => void;
 };
 
+const PROVIDERS = [
+  { value: "mock", label: "mock" },
+  { value: "codex", label: "codex" },
+  { value: "opencode", label: "opencode" }
+];
+
 export function RunControls({
   activeSessionId,
+  selectedProvider,
+  onProviderChange,
   onCreateSession,
   onRunOneStep,
   onContinue,
@@ -20,6 +30,16 @@ export function RunControls({
   return (
     <section className="runtime-block" aria-label="运行控制">
       <h3>运行控制</h3>
+      <label className="provider-select">
+        <span>Provider</span>
+        <select value={selectedProvider} onChange={(event) => onProviderChange(event.target.value)}>
+          {PROVIDERS.map((provider) => (
+            <option key={provider.value} value={provider.value}>
+              {provider.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="control-grid">
         <button type="button" onClick={onCreateSession}>
           创建会话

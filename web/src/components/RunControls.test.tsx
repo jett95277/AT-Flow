@@ -6,15 +6,9 @@ import { RunControls } from "./RunControls";
 
 describe("RunControls", () => {
   it("calls runtime action callbacks", () => {
-    const actions = {
-      onCreateSession: vi.fn(),
-      onRunOneStep: vi.fn(),
-      onContinue: vi.fn(),
-      onRetry: vi.fn(),
-      onRefreshDoctor: vi.fn()
-    };
+    const actions = actionsMock();
 
-    render(<RunControls activeSessionId="s1" {...actions} />);
+    render(<RunControls activeSessionId="s1" selectedProvider="mock" {...actions} />);
 
     fireEvent.click(screen.getByRole("button", { name: "创建会话" }));
     fireEvent.click(screen.getByRole("button", { name: "执行一步" }));
@@ -28,4 +22,25 @@ describe("RunControls", () => {
     expect(actions.onRetry).toHaveBeenCalledWith("s1");
     expect(actions.onRefreshDoctor).toHaveBeenCalledTimes(1);
   });
+
+  it("lets the user select a provider", () => {
+    const actions = actionsMock();
+
+    render(<RunControls activeSessionId="s1" selectedProvider="mock" {...actions} />);
+
+    fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "codex" } });
+
+    expect(actions.onProviderChange).toHaveBeenCalledWith("codex");
+  });
 });
+
+function actionsMock() {
+  return {
+    onCreateSession: vi.fn(),
+    onRunOneStep: vi.fn(),
+    onContinue: vi.fn(),
+    onRetry: vi.fn(),
+    onRefreshDoctor: vi.fn(),
+    onProviderChange: vi.fn()
+  };
+}

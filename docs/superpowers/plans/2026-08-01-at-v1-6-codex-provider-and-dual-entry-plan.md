@@ -473,7 +473,7 @@ git commit -m "docs: preserve codex conversation mode"
 - Consumes: existing `POST /api/sessions`.
 - Produces: Web Console can create sessions with a selected provider mode.
 
-- [ ] **Step 1: Write backend test**
+- [x] **Step 1: Write backend test**
 
 Add to `tests/test_web_api.py`:
 
@@ -490,7 +490,7 @@ def test_create_session_accepts_codex_provider(self):
         self.assertTrue(workspace.state_path(response.json()["session"]["id"]).exists())
 ```
 
-- [ ] **Step 2: Run backend test**
+- [x] **Step 2: Run backend test**
 
 Run:
 
@@ -500,7 +500,7 @@ python -m unittest tests.test_web_api
 
 Expected: PASS if current endpoint already accepts provider strings.
 
-- [ ] **Step 3: Add frontend provider selector**
+- [x] **Step 3: Add frontend provider selector**
 
 Add a small select control to `RunControls`:
 
@@ -510,7 +510,7 @@ Provider: mock | codex | opencode
 
 Keep default as `mock` until Codex process execution is manually enabled.
 
-- [ ] **Step 4: Update frontend API payload**
+- [x] **Step 4: Update frontend API payload**
 
 `createSession` payload must include selected provider:
 
@@ -518,7 +518,7 @@ Keep default as `mock` until Codex process execution is manually enabled.
 client.createSession({ task: "Web 控制台演示任务", provider: selectedProvider })
 ```
 
-- [ ] **Step 5: Run frontend tests**
+- [x] **Step 5: Run frontend tests**
 
 Run:
 
@@ -527,7 +527,7 @@ cd web
 npm.cmd test -- --run
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/at_flow/web/app.py src/at_flow/web/runtime_service.py web/src tests

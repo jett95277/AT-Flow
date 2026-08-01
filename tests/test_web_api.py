@@ -198,6 +198,18 @@ class WebApiTests(unittest.TestCase):
             session_id = body["session"]["id"]
             self.assertTrue(workspace.state_path(session_id).exists())
 
+    def test_create_session_accepts_codex_provider(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            client = TestClient(create_app(directory))
+
+            response = client.post("/api/sessions", json={"task": "demo", "provider": "codex"})
+
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertEqual(body["session"]["provider"], "codex")
+            self.assertTrue(workspace.state_path(body["session"]["id"]).exists())
+
     def test_run_one_step_endpoint_advances_only_first_step(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace = ATWorkspace.init(Path(directory))
