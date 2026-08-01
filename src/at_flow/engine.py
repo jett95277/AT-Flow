@@ -9,7 +9,7 @@ from typing import Any
 from .artifacts import validate_artifact_contract
 from .context_contracts import build_agent_context_contract, write_agent_context_contract
 from .models import SessionState, now_iso
-from .providers import AgentContext, ProviderError, build_prompt, make_provider
+from .providers import AgentContext, ProviderError, build_prompt, make_provider, resolve_agent_provider
 from .render import render_session
 from .trace import append_trace_event
 from .transitions import recover_interrupted_step, retry_failed_step, transition_step
@@ -128,7 +128,8 @@ class Runner:
         if step.status == "done":
             return
 
-        provider = make_provider(session.provider, self.workspace.config)
+        provider_name = resolve_agent_provider(self.workspace.config, session.provider, step.agent)
+        provider = make_provider(provider_name, self.workspace.config)
         session_dir = self.workspace.session_dir(session.id)
         agent_dir = self.workspace.session_agent_dir(session.id, step.agent)
         self._trace(session.id, "prepare_agent", agent=step.agent, step_index=step_index, status=step.status)

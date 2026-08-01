@@ -210,7 +210,7 @@ def resolve_agent_provider(config: dict[str, Any], session_provider: str, agent:
     return session_provider
 ```
 
-In default config, add:
+In the project `at.config.json` or explicit workspace config, add:
 
 ```json
 "agent_providers": {
@@ -221,7 +221,7 @@ In default config, add:
 }
 ```
 
-For local tests, keep session provider default as `mock`; do not make Codex mandatory for unit tests.
+For local tests, keep session provider default as `mock`; do not make Codex mandatory for unit tests. Do not put this route into Python `DEFAULT_CONFIG` until provider availability UX exists, because it would make fresh test workspaces try Codex for code/test steps by default.
 
 - [x] **Step 4: Run test to verify it passes**
 
@@ -252,7 +252,7 @@ git commit -m "feat: add per-agent provider routing"
 - Consumes: `resolve_agent_provider(config, session_provider, agent)`
 - Produces: engine step execution uses the resolved provider for the current agent.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Extend `tests/test_provider_routing.py`:
 
@@ -279,7 +279,7 @@ def test_engine_uses_agent_provider_route_for_code_step(self):
         self.assertEqual(result.steps[0].status, "done")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -289,7 +289,7 @@ python -m unittest tests.test_provider_routing
 
 Expected: FAIL because engine still uses `session.provider`.
 
-- [ ] **Step 3: Update engine**
+- [x] **Step 3: Update engine**
 
 In `Runner._run_step`, resolve provider immediately before `make_provider`:
 
@@ -300,7 +300,7 @@ provider = make_provider(provider_name, self.workspace.config)
 
 Do not mutate `session.provider`; session provider remains the requested high-level default.
 
-- [ ] **Step 4: Run targeted tests**
+- [x] **Step 4: Run targeted tests**
 
 Run:
 
@@ -310,7 +310,7 @@ python -m unittest tests.test_provider_routing tests.test_engine
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src/at_flow/engine.py tests/test_provider_routing.py

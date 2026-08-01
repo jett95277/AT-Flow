@@ -16,12 +16,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "projects_dir": ".at/projects",
     },
     "pipeline": ["main", "analysis", "code", "test"],
-    "agent_providers": {
-        "main": "mock",
-        "analysis": "mock",
-        "code": "codex",
-        "test": "codex",
-    },
     "providers": {
         "mock": {
             "type": "mock",
