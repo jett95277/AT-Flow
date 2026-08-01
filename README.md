@@ -119,6 +119,12 @@ Role restriction must not become capability degradation.
 
 ## CLI 使用
 
+安装 Python 依赖：
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
 在项目根目录运行：
 
 ```powershell
