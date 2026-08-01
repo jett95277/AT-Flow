@@ -43,23 +43,100 @@ MVP-2 status:
 complete
 ```
 
-## Current Phase
+## Completed Phase
 
 ```text
-MVP-3: Packaging Readiness
+V1.5: Web Console
 ```
 
 Current objective:
 
 ```text
-Run acceptance tests, then decide the smallest safe packaging path for making
-AT usable as a pluggable one-command platform.
+Build a front/back separated AT Flow web console for local use and interview
+demonstration. The console must connect to a FastAPI backend, display runtime
+state, expose agent documents, and operate only through controlled backend
+commands.
 ```
 
-MVP-3 status:
+V1.5 status:
 
 ```text
-minimal packaging entry complete
+complete
+```
+
+Current V1.5 plan:
+
+```text
+docs/superpowers/plans/2026-08-01-at-v1-5-web-console-implementation-plan.md
+```
+
+Current V1.5 node:
+
+```text
+none
+```
+
+Last completed V1.5 node:
+
+```text
+Task 9: Integration Test, Browser Verification, Sandbox Test, and Docs
+```
+
+## Current Phase
+
+```text
+V1.6: Codex Provider, Dual Entry, and Language Contract
+```
+
+Current objective:
+
+```text
+Keep AT Flow's two official usage modes while making mature Codex CLI capability
+the preferred code-agent provider. Web Console mode and Codex Conversation mode
+must both call the same AT runtime, provider adapters, state machine, artifacts,
+trace, audit, and permission boundaries.
+```
+
+V1.6 status:
+
+```text
+planned
+```
+
+Current V1.6 plan:
+
+```text
+docs/superpowers/plans/2026-08-01-at-v1-6-codex-provider-and-dual-entry-plan.md
+```
+
+Current V1.6 node:
+
+```text
+none
+```
+
+V1.6 design decisions:
+
+```text
+1. AT has two official usage modes:
+   - Codex Conversation Mode: user works inside Codex chat; AT state appears first.
+   - Web Console Mode: user works in browser; backend calls the same AT runtime.
+2. Codex is the preferred mature code-agent provider for code/test work.
+3. GPT/OpenAI API may be added as a provider, but must not replace Codex by default.
+4. agent.md restricts role and side effects, not Codex's engineering capability.
+5. Hard boundaries belong to permissions.json, private workspaces, context.json,
+   post-run audit, artifact validation, and state transition rules.
+6. Language contract can keep frontend display in Chinese while runtime prompts
+   and provider artifacts use English.
+```
+
+V1.5 execution rule:
+
+```text
+Each development node must update this file first, add or update targeted unit
+tests, make those tests pass, and stop before the next node. After frontend
+feature completion, run integration tests and sandbox tests before claiming the
+web console is complete.
 ```
 
 ## Scope Freeze
