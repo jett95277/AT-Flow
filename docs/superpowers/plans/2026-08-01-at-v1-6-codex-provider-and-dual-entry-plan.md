@@ -397,7 +397,7 @@ git commit -m "docs: define codex provider boundary"
 - Consumes: existing `install-codex-trigger`.
 - Produces: Codex conversation mode stays an official entry mode.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `tests/test_codex_trigger.py`, assert generated AGENTS.md includes:
 
@@ -408,7 +408,7 @@ Web Console Mode
 AT state machine must be shown before Codex/provider execution
 ```
 
-- [ ] **Step 2: Run test**
+- [x] **Step 2: Run test**
 
 Run:
 
@@ -418,7 +418,7 @@ python -m unittest tests.test_codex_trigger
 
 Expected: FAIL until trigger text is updated.
 
-- [ ] **Step 3: Update trigger block**
+- [x] **Step 3: Update trigger block**
 
 In `src/at_flow/codex_trigger.py`, add a concise entry-mode section:
 
@@ -430,7 +430,7 @@ AT has two official usage modes:
 Codex is a mature code-agent provider. Use it as execution layer, not flow owner.
 ```
 
-- [ ] **Step 4: Update README**
+- [x] **Step 4: Update README**
 
 Add:
 
@@ -441,7 +441,7 @@ AT Flow supports two official modes:
 Both call the same runtime and provider adapters.
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -449,7 +449,7 @@ Run:
 python -m unittest tests.test_codex_trigger
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/at_flow/codex_trigger.py tests/test_codex_trigger.py README.md

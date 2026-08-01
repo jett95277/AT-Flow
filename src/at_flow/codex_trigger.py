@@ -18,6 +18,19 @@ This project has AT Flow enabled.
 AT is a conversation-controlled multi-agent runtime. The user-facing interface is
 the Codex conversation. The CLI command is only the background runtime.
 
+## Usage Modes
+
+AT has two official usage modes:
+
+1. Codex Conversation Mode: the user works inside Codex chat; AT renders status
+   first and then uses Codex/provider as the execution layer.
+2. Web Console Mode: the user works in the browser; the backend calls the same
+   AT runtime, session state, provider adapters, artifacts, trace, and audit.
+
+AT state machine must be shown before Codex/provider execution. Codex is a
+mature code-agent provider, but AT owns orchestration, state transitions,
+permission boundaries, handoff, artifact validation, trace, and audit.
+
 ## Trigger Rules
 
 When the user's message is exactly one of these:

@@ -27,6 +27,10 @@ class CodexTriggerTests(unittest.TestCase):
             self.assertIn("`AT：`", content)
             self.assertIn("panel --format chat", content)
             self.assertIn(f'python "{at_entrypoint.resolve()}"', content)
+            self.assertIn("AT has two official usage modes", content)
+            self.assertIn("Codex Conversation Mode", content)
+            self.assertIn("Web Console Mode", content)
+            self.assertIn("AT state machine must be shown before Codex/provider execution", content)
 
     def test_install_codex_trigger_defaults_to_module_command(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
