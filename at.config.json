@@ -11,6 +11,12 @@
     "code",
     "test"
   ],
+  "agent_providers": {
+    "main": "mock",
+    "analysis": "mock",
+    "code": "codex",
+    "test": "codex"
+  },
   "providers": {
     "mock": {
       "type": "mock"

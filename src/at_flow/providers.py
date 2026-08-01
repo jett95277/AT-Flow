@@ -340,3 +340,12 @@ def make_provider(name: str, config: dict[str, Any]) -> Provider:
     if provider_type == "process":
         return ProcessProvider(name, provider_config)
     raise ProviderError(f"Unsupported provider type for {name}: {provider_type}")
+
+
+def resolve_agent_provider(config: dict[str, Any], session_provider: str, agent: str) -> str:
+    routes = config.get("agent_providers", {})
+    if isinstance(routes, dict):
+        route = routes.get(agent)
+        if isinstance(route, str) and route.strip():
+            return route
+    return session_provider

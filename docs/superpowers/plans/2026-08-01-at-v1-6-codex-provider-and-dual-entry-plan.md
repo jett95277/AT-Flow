@@ -147,7 +147,7 @@ state transition rules
 - Consumes: existing `workspace.config`
 - Produces: `resolve_agent_provider(config: dict, session_provider: str, agent: str) -> str`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_provider_routing.py`:
 
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -196,7 +196,7 @@ python -m unittest tests.test_provider_routing
 
 Expected: FAIL because `resolve_agent_provider` does not exist.
 
-- [ ] **Step 3: Implement provider routing**
+- [x] **Step 3: Implement provider routing**
 
 In `src/at_flow/providers.py`, add:
 
@@ -223,7 +223,7 @@ In default config, add:
 
 For local tests, keep session provider default as `mock`; do not make Codex mandatory for unit tests.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run:
 
@@ -233,7 +233,7 @@ python -m unittest tests.test_provider_routing
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add at.config.json src/at_flow/config.py src/at_flow/providers.py tests/test_provider_routing.py

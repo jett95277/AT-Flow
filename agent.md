@@ -112,7 +112,7 @@ docs/superpowers/plans/2026-08-01-at-v1-6-codex-provider-and-dual-entry-plan.md
 Current V1.6 node:
 
 ```text
-none
+Task 1: Provider Routing Contract
 ```
 
 V1.6 design decisions:
