@@ -100,7 +100,7 @@ trace, audit, and permission boundaries.
 V1.6 status:
 
 ```text
-planned
+complete
 ```
 
 Current V1.6 plan:
@@ -112,7 +112,13 @@ docs/superpowers/plans/2026-08-01-at-v1-6-codex-provider-and-dual-entry-plan.md
 Current V1.6 node:
 
 ```text
-Task 6: Language Contract And Prompt Policy Skill
+none
+```
+
+Last completed V1.6 node:
+
+```text
+Task 7: Full Verification
 ```
 
 V1.6 design decisions:

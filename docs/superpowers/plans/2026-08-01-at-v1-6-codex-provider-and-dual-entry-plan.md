@@ -666,7 +666,7 @@ git commit -m "feat: add language contract"
 **Interfaces:**
 - Verifies both entry modes and provider routing remain stable.
 
-- [ ] **Step 1: Run Python tests**
+- [x] **Step 1: Run Python tests**
 
 ```powershell
 python -m unittest discover -s tests
@@ -674,7 +674,7 @@ python -m unittest discover -s tests
 
 Expected: all tests pass.
 
-- [ ] **Step 2: Run frontend tests**
+- [x] **Step 2: Run frontend tests**
 
 ```powershell
 cd web
@@ -683,7 +683,7 @@ npm.cmd test -- --run
 
 Expected: all tests pass.
 
-- [ ] **Step 3: Run frontend build**
+- [x] **Step 3: Run frontend build**
 
 ```powershell
 cd web
@@ -692,7 +692,7 @@ npm.cmd run build
 
 Expected: build passes. If Windows sandbox returns `EPERM` writing `web/dist`, rerun the same command with explicit approval and document that the fallback is permission-related.
 
-- [ ] **Step 4: Run Web Console smoke**
+- [x] **Step 4: Run Web Console smoke**
 
 Start backend and frontend, then verify:
 
@@ -703,7 +703,7 @@ GET  /api/workspace/tree -> 200
 POST /api/sessions provider=mock -> 200
 ```
 
-- [ ] **Step 5: Run Codex conversation trigger smoke**
+- [x] **Step 5: Run Codex conversation trigger smoke**
 
 Use a temp project:
 
@@ -713,7 +713,7 @@ python -m at_flow enable --target <temp-project>
 
 Verify generated `AGENTS.md` contains both usage modes and says AT state is shown before provider execution.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git status --short
