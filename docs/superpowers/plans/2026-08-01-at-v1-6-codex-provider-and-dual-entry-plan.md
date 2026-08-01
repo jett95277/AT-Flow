@@ -554,7 +554,7 @@ git commit -m "feat: add web provider selection"
 - Produces: `.at/sessions/<session-id>/language.json`
 - Produces: agent `context.json` includes language fields.
 
-- [ ] **Step 1: Write failing language contract test**
+- [x] **Step 1: Write failing language contract test**
 
 Create `tests/test_language_contracts.py`:
 
@@ -606,7 +606,7 @@ class LanguageContractTests(unittest.TestCase):
             self.assertEqual(context["language"]["runtime_language"], "en")
 ```
 
-- [ ] **Step 2: Run test**
+- [x] **Step 2: Run test**
 
 Run:
 
@@ -616,7 +616,7 @@ python -m unittest tests.test_language_contracts
 
 Expected: FAIL because language module and file writing do not exist.
 
-- [ ] **Step 3: Implement deterministic language adapter**
+- [x] **Step 3: Implement deterministic language adapter**
 
 Initial implementation does not call LLM. It stores original Chinese and wraps runtime task with English policy:
 
@@ -628,7 +628,7 @@ Original user task:
 
 This is not token-optimal yet; it creates the stable contract before GPT translation is added.
 
-- [ ] **Step 4: Add prompt policy skill**
+- [x] **Step 4: Add prompt policy skill**
 
 Create `.at/shared/skills/prompt-language-policy/SKILL.md`:
 
@@ -641,7 +641,7 @@ Keep trace and audit in original execution language.
 Do not translate paths, command names, API names, or code identifiers.
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -649,7 +649,7 @@ Run:
 python -m unittest tests.test_language_contracts tests.test_context_memory_contracts
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src/at_flow/language tests/test_language_contracts.py .at/shared/skills/prompt-language-policy src/at_flow/engine.py

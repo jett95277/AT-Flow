@@ -112,7 +112,7 @@ docs/superpowers/plans/2026-08-01-at-v1-6-codex-provider-and-dual-entry-plan.md
 Current V1.6 node:
 
 ```text
-Task 5: Web Console Provider Selection
+Task 6: Language Contract And Prompt Policy Skill
 ```
 
 V1.6 design decisions:

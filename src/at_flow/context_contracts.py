@@ -54,6 +54,7 @@ def build_agent_context_contract(context: "AgentContext") -> dict[str, Any]:
             "shared_docs": _authorized_shared_files(context, read_permissions, "shared_docs", "docs"),
             "shared_inbox": _authorized_shared_files(context, read_permissions, "shared_inbox", "inbox"),
         },
+        "language": context.language or {},
         "input_paths": [str(item.resolve()) for item in context.inbox_files],
     }
 

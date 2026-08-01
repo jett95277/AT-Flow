@@ -31,6 +31,7 @@ class AgentContext:
     project_path: Path
     session: SessionState
     step_index: int
+    language: dict[str, Any] | None = None
 
     @property
     def agent(self) -> str:

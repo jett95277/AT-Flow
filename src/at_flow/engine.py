@@ -8,6 +8,7 @@ from typing import Any
 
 from .artifacts import validate_artifact_contract
 from .context_contracts import build_agent_context_contract, write_agent_context_contract
+from .language import ensure_session_language_profile
 from .models import SessionState, now_iso
 from .providers import AgentContext, ProviderError, build_prompt, make_provider, resolve_agent_provider
 from .render import render_session
@@ -131,6 +132,11 @@ class Runner:
         provider_name = resolve_agent_provider(self.workspace.config, session.provider, step.agent)
         provider = make_provider(provider_name, self.workspace.config)
         session_dir = self.workspace.session_dir(session.id)
+        language = ensure_session_language_profile(
+            self.workspace.config,
+            session,
+            session_dir / "language.json",
+        )
         agent_dir = self.workspace.session_agent_dir(session.id, step.agent)
         self._trace(session.id, "prepare_agent", agent=step.agent, step_index=step_index, status=step.status)
         self.workspace.prepare_agent_directories(session.id, step.agent)
@@ -154,6 +160,7 @@ class Runner:
             project_path=project_path,
             session=session,
             step_index=step_index,
+            language=language,
         )
         step.input_paths = [str(path.resolve()) for path in context.inbox_files]
         self._trace(
