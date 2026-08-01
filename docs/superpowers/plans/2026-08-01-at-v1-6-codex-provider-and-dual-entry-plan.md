@@ -330,7 +330,7 @@ git commit -m "feat: route providers per agent step"
 - Consumes: process provider config.
 - Produces: Codex provider config remains process-based and auditable.
 
-- [ ] **Step 1: Write the failing config test**
+- [x] **Step 1: Write the failing config test**
 
 Add a test that asserts Codex config is present and process-based:
 
@@ -347,7 +347,7 @@ def test_default_codex_provider_is_process_provider(self):
         self.assertEqual(codex["env_policy"], "minimal")
 ```
 
-- [ ] **Step 2: Run test**
+- [x] **Step 2: Run test**
 
 Run:
 
@@ -357,7 +357,7 @@ python -m unittest tests.test_provider_routing
 
 Expected: PASS if the current config already satisfies it, otherwise FAIL with the missing field.
 
-- [ ] **Step 3: Harden docs and contract**
+- [x] **Step 3: Harden docs and contract**
 
 Document:
 
@@ -369,7 +369,7 @@ Codex output is collected into artifact.md.
 Codex cannot advance AT state directly.
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -377,7 +377,7 @@ Run:
 python -m unittest tests.test_provider_routing
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src/at_flow/providers.py docs/runtime-contracts.md tests/test_provider_routing.py

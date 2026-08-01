@@ -122,6 +122,30 @@ Legacy `AT_SHARED_MEMORY`, `AT_SHARED_SKILLS`, and `AT_SHARED_INBOX`
 environment variables are present but empty. Providers must use `AT_CONTEXT`
 instead of shared directory environment variables.
 
+## Provider Contract
+
+AT treats Codex, opencode, OpenAI API, and mock execution as provider adapters.
+Providers execute exactly one bounded agent step; they do not own the session
+state machine.
+
+Process providers such as Codex CLI and opencode must follow this boundary:
+
+- AT invokes the provider only after writing the agent package, `context.json`,
+  `input.json`, and `prompt.md`.
+- The provider current working directory is the agent private `workspace`.
+- The provider receives the prompt through the configured `prompt_mode`.
+- The provider receives a minimal environment by default.
+- The provider returns text output; AT collects it into `outbox/artifact.md`.
+- The provider cannot advance AT state directly.
+- The provider cannot mutate shared memory directly; it can only write proposals.
+- AT audits filesystem changes after the provider returns.
+
+Codex is the preferred mature code-agent provider for implementation and
+verification work, but AT remains the orchestrator. `agent.md` restricts role
+and side effects; `permissions.json`, private workspace layout, context
+construction, audit, artifact validation, and transition rules enforce the hard
+boundary.
+
 ## Memory Contract
 
 Shared long-term memory is initialized under:

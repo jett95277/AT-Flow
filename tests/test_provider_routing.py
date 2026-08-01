@@ -30,6 +30,17 @@ class ProviderRoutingTests(unittest.TestCase):
     def test_session_provider_is_fallback_when_no_agent_route_exists(self):
         self.assertEqual(resolve_agent_provider({}, "mock", "main"), "mock")
 
+    def test_default_codex_provider_is_process_provider(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+
+            codex = workspace.config["providers"]["codex"]
+
+            self.assertEqual(codex["type"], "process")
+            self.assertEqual(codex["command"][0], "codex")
+            self.assertEqual(codex["cwd"], "workspace")
+            self.assertEqual(codex["env_policy"], "minimal")
+
     def test_engine_uses_agent_provider_route_for_code_step(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace = ATWorkspace.init(Path(directory))
