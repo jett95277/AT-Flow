@@ -27,7 +27,7 @@ def create_app(root: Path | str = ".") -> FastAPI:
         CORSMiddleware,
         allow_origins=_allowed_origins_from_env(),
         allow_credentials=False,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
         allow_headers=["*"],
     )
 
@@ -60,6 +60,11 @@ def create_app(root: Path | str = ".") -> FastAPI:
         ]
         return {"checks": checks}
 
+    @app.get("/api/providers")
+    def providers() -> dict[str, object]:
+        workspace = _require_workspace(workspace_root)
+        return {"providers": RuntimeService(workspace).list_providers()}
+
     @app.get("/api/sessions")
     def sessions() -> dict[str, object]:
         workspace = _require_workspace(workspace_root)
@@ -89,6 +94,16 @@ def create_app(root: Path | str = ".") -> FastAPI:
     def session_state(session_id: str) -> dict[str, object]:
         workspace = _require_workspace(workspace_root)
         return RuntimeService(workspace).get_state(session_id)
+
+    @app.patch("/api/sessions/{session_id}/provider")
+    def update_session_provider(session_id: str, payload: dict[str, object]) -> dict[str, object]:
+        workspace = _require_workspace(workspace_root)
+        return RuntimeService(workspace).update_provider(session_id, str(payload.get("provider") or ""))
+
+    @app.get("/api/sessions/{session_id}/provider-status")
+    def session_provider_status(session_id: str) -> dict[str, object]:
+        workspace = _require_workspace(workspace_root)
+        return RuntimeService(workspace).provider_status(session_id)
 
     @app.get("/api/sessions/{session_id}/trace")
     def session_trace(session_id: str) -> dict[str, object]:

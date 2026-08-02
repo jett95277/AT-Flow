@@ -102,6 +102,19 @@ class WebApiTests(unittest.TestCase):
             self.assertTrue(any(check["name"] == "provider:mock" and check["ok"] for check in provider_checks))
             self.assertTrue(any(check["name"] == "provider:codex" for check in provider_checks))
 
+    def test_providers_endpoint_returns_configured_codeagents(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ATWorkspace.init(Path(directory))
+            client = TestClient(create_app(directory))
+
+            response = client.get("/api/providers")
+
+            self.assertEqual(response.status_code, 200)
+            providers = response.json()["providers"]
+            names = [provider["name"] for provider in providers]
+            self.assertEqual(names, ["auto", "codex", "mock", "opencode"])
+            self.assertTrue(any(provider["name"] == "mock" and provider["available"] for provider in providers))
+
     def test_sessions_returns_empty_list(self):
         with tempfile.TemporaryDirectory() as directory:
             ATWorkspace.init(Path(directory))
@@ -311,6 +324,115 @@ class WebApiTests(unittest.TestCase):
             body = response.json()
             self.assertEqual(body["session"]["steps"][0]["status"], "done")
             self.assertEqual(body["session"]["steps"][0]["retry_count"], 1)
+
+    def test_update_session_provider_changes_waiting_session(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            session = SessionState.new(
+                task="demo",
+                project_path=workspace.projects_root / "default",
+                provider="mock",
+                pipeline=["main"],
+                session_id="switch-session",
+            )
+            workspace.create_session(session)
+            client = TestClient(create_app(directory))
+
+            response = client.patch("/api/sessions/switch-session/provider", json={"provider": "opencode"})
+
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertTrue(body["ok"])
+            self.assertEqual(body["session"]["provider"], "opencode")
+            self.assertEqual(workspace.load_session("switch-session").provider, "opencode")
+
+    def test_update_session_provider_rejects_unknown_provider(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            session = SessionState.new(
+                task="demo",
+                project_path=workspace.projects_root / "default",
+                provider="mock",
+                pipeline=["main"],
+                session_id="unknown-provider-session",
+            )
+            workspace.create_session(session)
+            client = TestClient(create_app(directory))
+
+            response = client.patch("/api/sessions/unknown-provider-session/provider", json={"provider": "missing"})
+
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json()["error"]["code"], "invalid_transition")
+
+    def test_update_session_provider_rejects_running_session(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            session = SessionState.new(
+                task="demo",
+                project_path=workspace.projects_root / "default",
+                provider="mock",
+                pipeline=["main"],
+                session_id="running-provider-session",
+            )
+            transition_step(session, 0, "running")
+            workspace.create_session(session)
+            client = TestClient(create_app(directory))
+
+            response = client.patch("/api/sessions/running-provider-session/provider", json={"provider": "codex"})
+
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json()["error"]["code"], "invalid_transition")
+
+    def test_provider_status_resolves_auto_provider_for_next_agent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            config_path = Path(directory) / "at.config.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["agent_providers"] = {"code": "codex"}
+            config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+            session = SessionState.new(
+                task="demo",
+                project_path=workspace.projects_root / "default",
+                provider="auto",
+                pipeline=["code"],
+                session_id="provider-status-session",
+            )
+            workspace.create_session(session)
+            client = TestClient(create_app(directory))
+
+            response = client.get("/api/sessions/provider-status-session/provider-status")
+
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertEqual(body["selected_provider"], "auto")
+            self.assertEqual(body["next_agent"], "code")
+            self.assertEqual(body["resolved_provider"], "codex")
+            self.assertIn("available", body)
+
+    def test_provider_status_for_done_session_has_no_pending_step(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            session = SessionState.new(
+                task="demo",
+                project_path=workspace.projects_root / "default",
+                provider="auto",
+                pipeline=["main"],
+                session_id="provider-done-session",
+            )
+            transition_step(session, 0, "running")
+            transition_step(session, 0, "done")
+            workspace.create_session(session)
+            client = TestClient(create_app(directory))
+
+            response = client.get("/api/sessions/provider-done-session/provider-status")
+
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertEqual(body["selected_provider"], "auto")
+            self.assertIsNone(body["next_agent"])
+            self.assertEqual(body["resolved_provider"], "auto")
+            self.assertTrue(body["available"])
+            self.assertIn("no pending step", body["detail"])
 
 
 def _flatten_paths(nodes):

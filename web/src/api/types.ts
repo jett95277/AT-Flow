@@ -9,6 +9,50 @@ export type DoctorCheck = {
   detail: string;
 };
 
+export type ProviderCapability = {
+  name: string;
+  available: boolean;
+  provider_type: string;
+  detail: string;
+};
+
+export type ProviderStatus = {
+  selected_provider: string;
+  next_agent: string | null;
+  resolved_provider: string;
+  available: boolean;
+  detail: string;
+};
+
+export type TranslationState = {
+  status: "disabled" | "not_required" | "pending" | "running" | "completed" | "failed";
+  provider: string;
+  error: string | null;
+  updated_at: string;
+};
+
+export type LanguageProfile = {
+  schema_version: 2;
+  source_language: string;
+  runtime_language: string;
+  display_language: string;
+  artifact_mode: string;
+  task_original: string;
+  task_runtime: string;
+  input_translation: TranslationState;
+  display_translation: TranslationState;
+};
+
+export type ArtifactView = {
+  source: string;
+  display: string | null;
+  source_language: string;
+  display_language: string;
+  display_status: TranslationState["status"];
+  display_provider: string;
+  display_error: string | null;
+};
+
 export type FileNode = {
   name: string;
   path: string;

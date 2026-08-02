@@ -1,10 +1,10 @@
-import type { ApiErrorInfo, AuditReport, DoctorCheck, TraceEvent } from "../api/types";
+import type { ApiErrorInfo, ArtifactView, AuditReport, DoctorCheck, TraceEvent } from "../api/types";
 
 type RuntimeEvidenceProps = {
   trace: TraceEvent[];
   audit: AuditReport[];
   doctor: DoctorCheck[];
-  artifact: string | null;
+  artifact: ArtifactView | null;
   error: ApiErrorInfo | null;
 };
 
@@ -16,6 +16,7 @@ export function RuntimeEvidence({ trace, audit, doctor, artifact, error }: Runti
         <div className="evidence-error">
           <strong>{error.code}</strong>
           <span>{error.message}</span>
+          <span>{error.retryable ? "可重试" : "不可重试"}</span>
         </div>
       ) : null}
       <EvidenceList title="追踪记录" emptyText="暂无追踪记录" rows={trace.map((event) => String(event.event ?? "event"))} />
@@ -23,9 +24,34 @@ export function RuntimeEvidence({ trace, audit, doctor, artifact, error }: Runti
       <DoctorList checks={doctor} />
       <div className="evidence-group">
         <h4>产物</h4>
-        <pre>{artifact || "暂无产物"}</pre>
+        <ArtifactEvidence artifact={artifact} />
       </div>
     </section>
+  );
+}
+
+function ArtifactEvidence({ artifact }: { artifact: ArtifactView | null }) {
+  if (!artifact || !artifact.source) {
+    return <pre>暂无产物</pre>;
+  }
+  const displayReady = artifact.display_status === "completed" && artifact.display;
+  return (
+    <div className="artifact-evidence">
+      {displayReady ? <pre>{artifact.display}</pre> : null}
+      {artifact.display_status === "failed" ? (
+        <div className="artifact-translation-error">
+          <strong>中文展示生成失败</strong>
+          <span>{artifact.display_error || "翻译 Provider 未返回可用结果"}</span>
+        </div>
+      ) : null}
+      {!displayReady && artifact.display_status !== "failed" ? (
+        <p className="empty-text">中文展示状态：{artifact.display_status}</p>
+      ) : null}
+      <details>
+        <summary>英文源产物</summary>
+        <pre>{artifact.source}</pre>
+      </details>
+    </div>
   );
 }
 

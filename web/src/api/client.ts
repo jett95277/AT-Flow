@@ -1,12 +1,16 @@
 import type {
   ApiErrorBody,
+  ArtifactView,
   DoctorCheck,
   FileContentResponse,
   FileNode,
   HealthResponse,
+  LanguageProfile,
   SessionState,
   AuditReport,
   CommandResult,
+  ProviderCapability,
+  ProviderStatus,
   TraceEvent
 } from "./types";
 
@@ -45,6 +49,10 @@ export class AtApiClient {
     return this.get("/api/doctor");
   }
 
+  getProviders(): Promise<{ providers: ProviderCapability[] }> {
+    return this.get("/api/providers");
+  }
+
   getSessions(): Promise<{ sessions: SessionState[] }> {
     return this.get("/api/sessions");
   }
@@ -55,6 +63,18 @@ export class AtApiClient {
 
   getState(sessionId: string): Promise<SessionState> {
     return this.get(`/api/sessions/${encodeURIComponent(sessionId)}/state`);
+  }
+
+  getProviderStatus(sessionId: string): Promise<ProviderStatus> {
+    return this.get(`/api/sessions/${encodeURIComponent(sessionId)}/provider-status`);
+  }
+
+  getLanguage(sessionId: string): Promise<LanguageProfile> {
+    return this.get(`/api/sessions/${encodeURIComponent(sessionId)}/language`);
+  }
+
+  updateProvider(sessionId: string, provider: string): Promise<CommandResult> {
+    return this.patch(`/api/sessions/${encodeURIComponent(sessionId)}/provider`, { provider });
   }
 
   runOneStep(sessionId: string): Promise<CommandResult> {
@@ -77,7 +97,7 @@ export class AtApiClient {
     return this.get(`/api/sessions/${encodeURIComponent(sessionId)}/audit`);
   }
 
-  getArtifact(sessionId: string, agent: string): Promise<{ artifact: string }> {
+  getArtifact(sessionId: string, agent: string): Promise<ArtifactView> {
     return this.get(`/api/sessions/${encodeURIComponent(sessionId)}/artifact/${encodeURIComponent(agent)}`);
   }
 
@@ -86,7 +106,7 @@ export class AtApiClient {
   }
 
   getFile(path: string): Promise<FileContentResponse> {
-    return this.get(`/api/file?path=${encodeURIComponent(path)}`);
+    return this.get(`/api/file?path=${encodeURIComponent(path)}&language=zh`);
   }
 
   private async get<T>(path: string): Promise<T> {
@@ -100,6 +120,18 @@ export class AtApiClient {
   private async post<T>(path: string, payload: unknown): Promise<T> {
     const response = await this.fetcher(`${this.baseUrl}${path}`, {
       method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    return parseResponse<T>(response);
+  }
+
+  private async patch<T>(path: string, payload: unknown): Promise<T> {
+    const response = await this.fetcher(`${this.baseUrl}${path}`, {
+      method: "PATCH",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json"

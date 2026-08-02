@@ -9,7 +9,7 @@ from ..engine import Runner
 from ..inspectors import session_artifact_text, session_audit_summary, session_trace_summary
 from ..language.adapter import build_language_profile
 from ..models import SessionState
-from ..providers import check_provider_capability, resolve_agent_provider
+from ..providers import check_provider_capability, provider_capabilities, resolve_agent_provider
 from ..workspace import ATWorkspace, WorkspaceError
 
 
@@ -19,6 +19,18 @@ class RuntimeService:
 
     def list_sessions(self) -> list[dict[str, Any]]:
         return [session.to_dict() for session in self.workspace.list_sessions()]
+
+    def list_providers(self) -> list[dict[str, Any]]:
+        providers = [
+            {
+                "name": "auto",
+                "available": True,
+                "provider_type": "routing",
+                "detail": "routes each agent through agent_providers or default_provider",
+            },
+            *provider_capabilities(self.workspace.config),
+        ]
+        return sorted(providers, key=lambda item: str(item["name"]))
 
     def get_state(self, session_id: str) -> dict[str, Any]:
         return self._map_workspace_error(lambda: self.workspace.load_session(session_id).to_dict())
@@ -67,6 +79,55 @@ class RuntimeService:
 
     def retry_session(self, session_id: str) -> dict[str, Any]:
         return self._run_command(lambda: Runner(self.workspace).retry(session_id))
+
+    def update_provider(self, session_id: str, provider: str) -> dict[str, Any]:
+        return self._map_workspace_error(lambda: self._update_provider(session_id, provider))
+
+    def provider_status(self, session_id: str) -> dict[str, Any]:
+        return self._map_workspace_error(lambda: self._provider_status(session_id))
+
+    def _update_provider(self, session_id: str, provider: str) -> dict[str, Any]:
+        session = self.workspace.load_session(session_id)
+        selected = provider.strip()
+        allowed = {item["name"] for item in self.list_providers()}
+        if selected not in allowed:
+            raise ApiError(
+                code="invalid_transition",
+                message=f"Unknown provider: {selected or '(empty)'}",
+                retryable=False,
+            )
+        if session.interrupted_steps():
+            raise ApiError(
+                code="invalid_transition",
+                message="Cannot switch provider while a session step is running",
+                retryable=True,
+            )
+        session.provider = selected
+        self.workspace.save_session(session)
+        return CommandResultResponse(ok=True, session=session.to_dict()).to_dict()
+
+    def _provider_status(self, session_id: str) -> dict[str, Any]:
+        session = self.workspace.load_session(session_id)
+        next_index = session.next_step_index()
+        next_agent = session.steps[next_index].agent if next_index is not None else None
+        if next_agent is None:
+            return {
+                "selected_provider": session.provider,
+                "next_agent": None,
+                "resolved_provider": session.provider,
+                "available": True,
+                "detail": "no pending step",
+            }
+
+        resolved_provider = resolve_agent_provider(self.workspace.config, session.provider, next_agent)
+        capability = check_provider_capability(resolved_provider, self.workspace.config)
+        return {
+            "selected_provider": session.provider,
+            "next_agent": next_agent,
+            "resolved_provider": resolved_provider,
+            "available": bool(capability["available"]),
+            "detail": str(capability["detail"]),
+        }
 
     def _load_session_then(self, session_id: str, callback: Callable[[], Any]) -> Any:
         self.workspace.load_session(session_id)

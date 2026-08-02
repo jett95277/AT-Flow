@@ -532,6 +532,13 @@ def check_provider_capability(name: str, config: dict[str, Any]) -> dict[str, An
     }
 
 
+def provider_capabilities(config: dict[str, Any]) -> list[dict[str, Any]]:
+    providers = config.get("providers", {})
+    if not isinstance(providers, dict):
+        return []
+    return [check_provider_capability(name, config) for name in sorted(str(key) for key in providers)]
+
+
 def _provider_command_for_check(provider_config: dict[str, Any]) -> list[str]:
     raw = provider_config.get("command")
     if not raw:

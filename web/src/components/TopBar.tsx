@@ -1,8 +1,8 @@
-import type { HealthResponse } from "../api/types";
+import type { ApiErrorInfo, HealthResponse } from "../api/types";
 
 type TopBarProps = {
   health: HealthResponse | null;
-  error: string | null;
+  error: ApiErrorInfo | null;
 };
 
 export function TopBar({ health, error }: TopBarProps) {
@@ -14,7 +14,7 @@ export function TopBar({ health, error }: TopBarProps) {
       </div>
       <div className="top-bar-status">
         <span className={health ? "status-ok" : "status-muted"}>{health ? "后端正常" : "检查中"}</span>
-        {error ? <span className="status-error">{error}</span> : null}
+        {error ? <span className="status-error">{error.message}</span> : null}
       </div>
     </header>
   );

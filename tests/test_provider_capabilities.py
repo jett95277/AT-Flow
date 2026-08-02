@@ -6,7 +6,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from at_flow.providers import check_provider_capability
+from at_flow.config import default_config
+from at_flow.providers import check_provider_capability, provider_capabilities
 
 
 class ProviderCapabilityTests(unittest.TestCase):
@@ -34,6 +35,14 @@ class ProviderCapabilityTests(unittest.TestCase):
         self.assertEqual(result["name"], "missing")
         self.assertFalse(result["available"])
         self.assertEqual(result["provider_type"], "unknown")
+
+    def test_provider_capabilities_returns_all_configured_providers(self):
+        result = provider_capabilities(default_config())
+
+        names = [item["name"] for item in result]
+        self.assertEqual(names, ["codex", "mock", "opencode"])
+        self.assertTrue(all("available" in item for item in result))
+        self.assertTrue(all("detail" in item for item in result))
 
 
 if __name__ == "__main__":
