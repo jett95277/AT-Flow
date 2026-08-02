@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { AtApiClient } from "../api/client";
-import type { ApiErrorInfo, AuditReport, FileNode, HealthResponse, SessionState, TraceEvent } from "../api/types";
+import type { ApiErrorInfo, AuditReport, DoctorCheck, FileNode, HealthResponse, SessionState, TraceEvent } from "../api/types";
 import { DocumentViewer } from "./DocumentViewer";
 import { RunControls } from "./RunControls";
 import { RuntimeEvidence } from "./RuntimeEvidence";
@@ -21,6 +21,7 @@ export function AppShell({ client }: AppShellProps) {
   const [tree, setTree] = useState<FileNode[]>([]);
   const [trace, setTrace] = useState<TraceEvent[]>([]);
   const [audit, setAudit] = useState<AuditReport[]>([]);
+  const [doctor, setDoctor] = useState<DoctorCheck[]>([]);
   const [artifact, setArtifact] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [documentContent, setDocumentContent] = useState<string | null>(null);
@@ -123,6 +124,13 @@ export function AppShell({ client }: AppShellProps) {
       .catch(captureError);
   }
 
+  function refreshDoctor() {
+    client
+      .getDoctor()
+      .then((response) => setDoctor(response.checks))
+      .catch(captureError);
+  }
+
   return (
     <div className="app-shell">
       <TopBar health={health} error={error} />
@@ -142,12 +150,13 @@ export function AppShell({ client }: AppShellProps) {
             onRunOneStep={(sessionId) => runCommand(client.runOneStep.bind(client), sessionId)}
             onContinue={(sessionId) => runCommand(client.continueSession.bind(client), sessionId)}
             onRetry={(sessionId) => runCommand(client.retrySession.bind(client), sessionId)}
-            onRefreshDoctor={() => client.getDoctor().catch(captureError)}
+            onRefreshDoctor={refreshDoctor}
           />
           <StateMachine session={activeSession} />
           <RuntimeEvidence
             trace={trace}
             audit={audit}
+            doctor={doctor}
             artifact={artifact}
             error={error ? ({ code: "客户端错误", message: error, retryable: false } satisfies ApiErrorInfo) : null}
           />

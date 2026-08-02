@@ -236,7 +236,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     workspace = ATWorkspace.require(Path(args.root))
     checks = doctor_checks(workspace)
     print(render_doctor_checks(checks))
-    return 0 if all(ok for _, ok, _ in checks) else 1
+    required_checks = [(name, ok, detail) for name, ok, detail in checks if not name.startswith("provider:")]
+    return 0 if all(ok for _, ok, _ in required_checks) else 1
 
 
 def _renderer(format_name: str):

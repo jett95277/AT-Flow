@@ -88,6 +88,19 @@ class WebApiTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertTrue(any(check["name"] == "config" for check in response.json()["checks"]))
 
+    def test_doctor_returns_provider_capability_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ATWorkspace.init(Path(directory))
+            client = TestClient(create_app(directory))
+
+            response = client.get("/api/doctor")
+
+            self.assertEqual(response.status_code, 200)
+            checks = response.json()["checks"]
+            provider_checks = [check for check in checks if check["name"].startswith("provider:")]
+            self.assertTrue(any(check["name"] == "provider:mock" and check["ok"] for check in provider_checks))
+            self.assertTrue(any(check["name"] == "provider:codex" for check in provider_checks))
+
     def test_sessions_returns_empty_list(self):
         with tempfile.TemporaryDirectory() as directory:
             ATWorkspace.init(Path(directory))

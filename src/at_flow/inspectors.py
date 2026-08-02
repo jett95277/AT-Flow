@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .providers import check_provider_capability
 from .trace import read_trace_events
 from .workspace import ATWorkspace, WorkspaceError
 
@@ -79,6 +80,9 @@ def doctor_checks(workspace: ATWorkspace) -> list[tuple[str, bool, str]]:
         if any(step.status == "running" for step in session.steps)
     ]
     checks.append(("sessions_running", not running, ", ".join(running) if running else "none"))
+    for name in sorted(workspace.config.get("providers", {})):
+        capability = check_provider_capability(name, workspace.config)
+        checks.append((f"provider:{name}", bool(capability["available"]), str(capability["detail"])))
     return checks
 
 

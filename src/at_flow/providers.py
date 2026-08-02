@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import shutil
 import shlex
 import subprocess
 from typing import Any
@@ -352,6 +353,67 @@ def make_provider(name: str, config: dict[str, Any]) -> Provider:
     if provider_type == "process":
         return ProcessProvider(name, provider_config)
     raise ProviderError(f"Unsupported provider type for {name}: {provider_type}")
+
+
+def check_provider_capability(name: str, config: dict[str, Any]) -> dict[str, Any]:
+    provider_config = config.get("providers", {}).get(name)
+    if provider_config is None:
+        return {
+            "name": name,
+            "available": False,
+            "provider_type": "unknown",
+            "detail": f"unknown provider: {name}",
+        }
+
+    provider_type = provider_config.get("type", name)
+    if provider_type == "mock":
+        return {
+            "name": name,
+            "available": True,
+            "provider_type": "mock",
+            "detail": "mock provider is always available",
+        }
+
+    if provider_type == "process":
+        command = _provider_command_for_check(provider_config)
+        if not command:
+            return {
+                "name": name,
+                "available": False,
+                "provider_type": "process",
+                "detail": "provider command is not configured",
+            }
+        executable = command[0]
+        path = shutil.which(executable)
+        if path:
+            return {
+                "name": name,
+                "available": True,
+                "provider_type": "process",
+                "detail": f"command found: {path}",
+            }
+        return {
+            "name": name,
+            "available": False,
+            "provider_type": "process",
+            "detail": f"command not found: {executable}",
+        }
+
+    return {
+        "name": name,
+        "available": False,
+        "provider_type": str(provider_type),
+        "detail": f"unsupported provider type: {provider_type}",
+    }
+
+
+def _provider_command_for_check(provider_config: dict[str, Any]) -> list[str]:
+    raw = provider_config.get("command")
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        return shlex.split(raw)
+    return [str(item) for item in raw]
 
 
 def resolve_agent_provider(config: dict[str, Any], session_provider: str, agent: str) -> str:
