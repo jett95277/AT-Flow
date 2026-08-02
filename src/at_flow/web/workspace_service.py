@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path, PurePosixPath
+from typing import Any, Callable
 
 from .errors import ApiError
 from .schemas import FileNodeResponse
+from ..language.translator import (
+    ProcessTextTranslator,
+    TextTranslator,
+    TranslationError,
+    make_text_translator,
+)
 from ..workspace import ATWorkspace
 
 
@@ -11,8 +18,14 @@ ALLOWED_TREE_ROOTS = ("agents", "shared", "sessions")
 
 
 class WorkspaceService:
-    def __init__(self, workspace: ATWorkspace) -> None:
+    def __init__(
+        self,
+        workspace: ATWorkspace,
+        *,
+        translator_factory: Callable[[dict[str, Any], str, Path], TextTranslator] = make_text_translator,
+    ) -> None:
         self.workspace = workspace
+        self.translator_factory = translator_factory
 
     def tree(self) -> list[FileNodeResponse]:
         nodes: list[FileNodeResponse] = []
@@ -32,12 +45,65 @@ class WorkspaceService:
             display = self._display_copy(path)
             if display is not None and display.is_file():
                 return display.read_text(encoding="utf-8")
+            if self._session_document_needs_translation(path):
+                return self._translate_session_document(path)
         return path.read_text(encoding="utf-8")
 
     def _display_copy(self, path: Path) -> Path | None:
         if path.suffix.lower() != ".md":
             return None
         return path.with_name(f"{path.stem}.zh.md")
+
+    def _session_document_needs_translation(self, path: Path) -> bool:
+        try:
+            path.relative_to(self.workspace.sessions_root)
+        except ValueError:
+            return False
+        if path.suffix.lower() != ".md":
+            return False
+        language = self.workspace.config.get("language", {})
+        if not isinstance(language, dict) or not language.get("enabled"):
+            return False
+        runtime = str(language.get("runtime") or "en")
+        display = str(language.get("display") or "zh")
+        if runtime == display:
+            return False
+        provider = str(language.get("translation_provider") or "")
+        return bool(provider)
+
+    def _translate_session_document(self, path: Path) -> str:
+        language = self.workspace.config.get("language", {})
+        if not isinstance(language, dict):
+            language = {}
+        provider = str(language.get("translation_provider") or "")
+        runtime = str(language.get("runtime") or "en")
+        display = str(language.get("display") or "zh")
+        work_dir = self.workspace.root / ".at" / "translation" / "workspace"
+        try:
+            translator = self.translator_factory(self.workspace.config, provider, work_dir)
+            self._attach_skill_dir(translator)
+            translated = translator.translate(
+                path.read_text(encoding="utf-8"),
+                runtime,
+                display,
+                "document",
+            ).strip()
+        except TranslationError as exc:
+            raise ApiError(
+                code="display_translation_failed",
+                message=str(exc),
+                retryable=exc.retryable,
+            ) from exc
+        display_path = self._display_copy(path)
+        if display_path is not None:
+            display_path.parent.mkdir(parents=True, exist_ok=True)
+            display_path.write_text(translated + "\n", encoding="utf-8")
+        return translated + "\n"
+
+    def _attach_skill_dir(self, translator: TextTranslator) -> None:
+        if not isinstance(translator, ProcessTextTranslator):
+            return
+        translator.skill_dir = self.workspace.shared_root / "skills" / "language-translation"
 
     def _is_translation_copy(self, path: Path) -> bool:
         name = path.name
