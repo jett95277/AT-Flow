@@ -1,4 +1,9 @@
-.at/
+.at/sessions/
+.at/projects/
+.at/web/
+.at/cache/
+.at/*.log
+.at/*.sqlite3
 .codex-analysis/
 baize-system/
 baize-claude-extracted/

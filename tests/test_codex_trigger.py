@@ -65,7 +65,8 @@ class CodexTriggerTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             self.assertTrue((target / "at.config.json").exists())
-            self.assertTrue((target / ".at" / "shared" / "agents" / "main" / "agent.md").exists())
+            self.assertTrue((target / ".at" / "agents" / "main" / "agent.md").exists())
+            self.assertFalse((target / ".at" / "shared" / "agents").exists())
             content = (target / "AGENTS.md").read_text(encoding="utf-8")
             self.assertIn("python -m at_flow --root", content)
 

@@ -16,6 +16,7 @@ from .inspectors import (
     session_audit_summary,
     session_trace_summary,
 )
+from .migrations import MigrationError, migrate_agent_layout
 from .models import SessionState
 from .render import (
     render_chat_panel,
@@ -32,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (ConfigError, WorkspaceError) as exc:
+    except (ConfigError, MigrationError, WorkspaceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
@@ -106,6 +107,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor_parser = subparsers.add_parser("doctor", help="check AT workspace health")
     doctor_parser.set_defaults(func=cmd_doctor)
+
+    migration_parser = subparsers.add_parser(
+        "migrate-agent-layout",
+        help="preview or apply the .at/shared/agents to .at/agents migration",
+    )
+    migration_parser.add_argument("--apply", action="store_true", help="move files and update at.config.json")
+    migration_parser.set_defaults(func=cmd_migrate_agent_layout)
 
     return parser
 
@@ -238,6 +246,18 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(render_doctor_checks(checks))
     required_checks = [(name, ok, detail) for name, ok, detail in checks if not name.startswith("provider:")]
     return 0 if all(ok for _, ok, _ in required_checks) else 1
+
+
+def cmd_migrate_agent_layout(args: argparse.Namespace) -> int:
+    result = migrate_agent_layout(Path(args.root), apply=args.apply)
+    print(f"status: {result.status}")
+    print(f"source: {result.source}")
+    print(f"target: {result.target}")
+    for path in result.moved_files:
+        print(f"file: {path}")
+    if result.status == "preview":
+        print("next: rerun with --apply after reviewing the paths")
+    return 0
 
 
 def _renderer(format_name: str):

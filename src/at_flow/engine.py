@@ -6,9 +6,9 @@ from pathlib import Path
 import shutil
 from typing import Any
 
-from .artifacts import validate_artifact_contract
+from .artifacts import validate_artifact_contract, validate_runtime_artifact_language
 from .context_contracts import build_agent_context_contract, write_agent_context_contract
-from .language import ensure_session_language_profile
+from .language import LanguageError, LanguageService
 from .models import SessionState, now_iso
 from .providers import AgentContext, ProviderError, build_prompt, make_provider, resolve_agent_provider
 from .render import render_session
@@ -17,18 +17,54 @@ from .transitions import recover_interrupted_step, retry_failed_step, transition
 from .workspace import ATWorkspace, WorkspaceError
 
 
+def _pid_is_running(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
 class SessionLock:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.handle: int | None = None
 
     def __enter__(self) -> "SessionLock":
-        try:
-            self.handle = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError as exc:
-            raise WorkspaceError(f"Session is already running: {self.path.parent.name}") from exc
+        for attempt in range(2):
+            try:
+                self.handle = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                break
+            except FileExistsError as exc:
+                if attempt == 0 and self._reclaim_dead_owner():
+                    continue
+                raise WorkspaceError(f"Session is already running: {self.path.parent.name}") from exc
+        if self.handle is None:
+            raise WorkspaceError(f"Could not acquire Session lock: {self.path.parent.name}")
         os.write(self.handle, str(os.getpid()).encode("utf-8"))
         return self
+
+    def _reclaim_dead_owner(self) -> bool:
+        try:
+            owner_text = self.path.read_text(encoding="utf-8").strip()
+            owner_pid = int(owner_text)
+        except (FileNotFoundError, OSError, ValueError):
+            return False
+        if owner_pid <= 0 or _pid_is_running(owner_pid):
+            return False
+        try:
+            if self.path.read_text(encoding="utf-8").strip() != owner_text:
+                return False
+            self.path.unlink()
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+        return True
 
     def __exit__(self, exc_type, exc, tb) -> None:
         if self.handle is not None:
@@ -41,9 +77,15 @@ class SessionLock:
 
 
 class Runner:
-    def __init__(self, workspace: ATWorkspace, renderer=render_session) -> None:
+    def __init__(
+        self,
+        workspace: ATWorkspace,
+        renderer=render_session,
+        language_service: LanguageService | None = None,
+    ) -> None:
         self.workspace = workspace
         self.renderer = renderer
+        self.language_service = language_service or LanguageService(workspace)
 
     def run(self, session_id: str, provider_name: str | None = None, one_step: bool = False) -> SessionState:
         lock_path = self.workspace.session_dir(session_id) / ".lock"
@@ -129,18 +171,49 @@ class Runner:
         if step.status == "done":
             return
 
-        provider_name = resolve_agent_provider(self.workspace.config, session.provider, step.agent)
-        provider = make_provider(provider_name, self.workspace.config)
         session_dir = self.workspace.session_dir(session.id)
-        language = ensure_session_language_profile(
-            self.workspace.config,
-            session,
-            session_dir / "language.json",
-        )
         agent_dir = self.workspace.session_agent_dir(session.id, step.agent)
         self._trace(session.id, "prepare_agent", agent=step.agent, step_index=step_index, status=step.status)
         self.workspace.prepare_agent_directories(session.id, step.agent)
         self.workspace.materialize_session_agent_package(session.id, step.agent)
+        transition_step(session, step_index, "running")
+        self._trace(session.id, "transition_state", agent=step.agent, step_index=step_index, status="running")
+        self.workspace.save_session(session)
+        self._trace(session.id, "translation_started", agent=step.agent, step_index=step_index, status="running", data={"purpose": "task"})
+        try:
+            language = self.language_service.ensure_runtime_profile(session)
+        except LanguageError as exc:
+            artifact_path = self._write_language_failure(session, step_index, exc)
+            transition_step(
+                session,
+                step_index,
+                "failed",
+                artifact_path=str(artifact_path.resolve()),
+                error=str(exc),
+                retryable=exc.retryable,
+            )
+            self._trace(
+                session.id,
+                "translation_failed",
+                agent=step.agent,
+                step_index=step_index,
+                status="failed",
+                detail=str(exc),
+                data={"purpose": "task", "code": exc.code},
+            )
+            self._trace(session.id, "transition_state", agent=step.agent, step_index=step_index, status="failed", detail=str(exc))
+            self.workspace.save_session(session)
+            return
+        self._trace(
+            session.id,
+            "translation_completed",
+            agent=step.agent,
+            step_index=step_index,
+            status="running",
+            data={"purpose": "task", "translation_status": language["input_translation"]["status"]},
+        )
+        provider_name = resolve_agent_provider(self.workspace.config, session.provider, step.agent)
+        provider = make_provider(provider_name, self.workspace.config)
         self._route_prior_artifacts_to_inbox(session, step_index)
         project_path = Path(session.project_path)
         project_path.mkdir(parents=True, exist_ok=True)
@@ -184,10 +257,6 @@ class Runner:
         prompt = build_prompt(context)
         (agent_dir / "prompt.md").write_text(prompt, encoding="utf-8")
 
-        transition_step(session, step_index, "running")
-        self._trace(session.id, "transition_state", agent=step.agent, step_index=step_index, status="running")
-        self.workspace.save_session(session)
-
         baseline = self._snapshot_protected_paths(context)
         artifact_path: Path | None = None
         failure_error: str | None = None
@@ -214,6 +283,57 @@ class Runner:
                     detail=failure_error,
                     data={"missing_sections": missing_sections},
                 )
+            if not failure_error:
+                language_violations = validate_runtime_artifact_language(
+                    artifact_path.read_text(encoding="utf-8"),
+                    str(language.get("runtime_language") or ""),
+                )
+                if language_violations:
+                    failure_error = "Artifact language contract failed: " + ", ".join(language_violations)
+                    artifact_path = self._write_failure_artifact(context, failure_error, retryable=True)
+                    self._trace(
+                        session.id,
+                        "artifact_language_failed",
+                        agent=step.agent,
+                        step_index=step_index,
+                        status="running",
+                        detail=failure_error,
+                        data={"violations": language_violations},
+                    )
+            if not failure_error:
+                self._trace(
+                    session.id,
+                    "translation_started",
+                    agent=step.agent,
+                    step_index=step_index,
+                    status="running",
+                    data={"purpose": "artifact"},
+                )
+                display_path = self.language_service.translate_artifact(session, step.agent, artifact_path)
+                display_state = self.language_service.get_profile(session)["display_translation"]
+                if display_state["status"] == "failed":
+                    self._trace(
+                        session.id,
+                        "translation_failed",
+                        agent=step.agent,
+                        step_index=step_index,
+                        status="running",
+                        detail=str(display_state.get("error") or "Display translation failed"),
+                        data={"purpose": "artifact", "provider": display_state.get("provider")},
+                    )
+                else:
+                    self._trace(
+                        session.id,
+                        "translation_completed",
+                        agent=step.agent,
+                        step_index=step_index,
+                        status="running",
+                        data={
+                            "purpose": "artifact",
+                            "translation_status": display_state["status"],
+                            "display_path": str(display_path.resolve()) if display_path else None,
+                        },
+                    )
             self._trace(session.id, "run_agent_done", agent=step.agent, step_index=step_index, status="running")
         except ProviderError as exc:
             failure_error = str(exc)
@@ -288,6 +408,22 @@ class Runner:
             "status": "failed",
             "error": error,
             "retryable": retryable,
+            "created_at": now_iso(),
+        }
+        failure_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        return failure_path
+
+    def _write_language_failure(self, session: SessionState, step_index: int, error: LanguageError) -> Path:
+        step = session.steps[step_index]
+        failure_path = self.workspace.session_agent_outbox_dir(session.id, step.agent) / "failure.json"
+        data = {
+            "session_id": session.id,
+            "agent": step.agent,
+            "step_index": step_index,
+            "status": "failed",
+            "error": str(error),
+            "code": error.code,
+            "retryable": error.retryable,
             "created_at": now_iso(),
         }
         failure_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")

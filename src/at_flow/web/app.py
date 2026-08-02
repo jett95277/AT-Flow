@@ -103,7 +103,12 @@ def create_app(root: Path | str = ".") -> FastAPI:
     @app.get("/api/sessions/{session_id}/artifact/{agent}")
     def session_artifact(session_id: str, agent: str) -> dict[str, object]:
         workspace = _require_workspace(workspace_root)
-        return {"artifact": RuntimeService(workspace).get_artifact(session_id, agent)}
+        return RuntimeService(workspace).get_artifact(session_id, agent)
+
+    @app.get("/api/sessions/{session_id}/language")
+    def session_language(session_id: str) -> dict[str, object]:
+        workspace = _require_workspace(workspace_root)
+        return RuntimeService(workspace).get_language(session_id)
 
     @app.post("/api/sessions/{session_id}/run-one-step")
     def run_one_step(session_id: str) -> dict[str, object]:
@@ -126,11 +131,11 @@ def create_app(root: Path | str = ".") -> FastAPI:
         return {"tree": [node.to_dict() for node in WorkspaceService(workspace).tree()]}
 
     @app.get("/api/file")
-    def read_file(path: str) -> dict[str, object]:
+    def read_file(path: str, language: str = "zh") -> dict[str, object]:
         workspace = _require_workspace(workspace_root)
         return {
             "path": path,
-            "content": WorkspaceService(workspace).read_file(path),
+            "content": WorkspaceService(workspace).read_file(path, language),
         }
 
     return app

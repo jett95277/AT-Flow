@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import signal
 import shutil
 import shlex
 import subprocess
@@ -73,27 +74,13 @@ class ProcessProvider(Provider):
         self.config = config
 
     def run(self, context: AgentContext, prompt: str) -> AgentResult:
-        command = self._command()
-        prompt_mode = self.config.get("prompt_mode", "stdin")
         cwd = self._cwd(context)
-        timeout = int(self.config.get("timeout_seconds", 1800))
-
-        stdin: str | None = None
-        if prompt_mode == "stdin":
-            stdin = prompt
-            args = command
-        elif prompt_mode == "arg":
-            args = [*command, prompt]
-        elif prompt_mode == "file":
-            prompt_path = context.agent_dir / "prompt.md"
-            prompt_path.write_text(prompt, encoding="utf-8")
-            args = [*command, str(prompt_path)]
-        else:
-            raise ProviderError(f"Unsupported prompt_mode for {self.name}: {prompt_mode}")
-
-        env = self._base_env()
-        env.update(
-            {
+        output = run_process_prompt(
+            self.name,
+            self.config,
+            prompt,
+            cwd=cwd,
+            env_overrides={
                 "AT_SESSION_ID": context.session.id,
                 "AT_AGENT": context.agent,
                 "AT_AGENT_DIR": str(context.agent_dir),
@@ -107,55 +94,10 @@ class ProcessProvider(Provider):
                 "AT_SHARED_MEMORY": "",
                 "AT_SHARED_SKILLS": "",
                 "AT_SHARED_INBOX": "",
-            }
+            },
+            prompt_path=context.agent_dir / "prompt.md",
         )
-        env.update({str(key): str(value) for key, value in self.config.get("env", {}).items()})
-
-        try:
-            completed = subprocess.run(
-                args,
-                input=stdin,
-                text=True,
-                capture_output=True,
-                cwd=str(cwd),
-                env=env,
-                timeout=timeout,
-                check=False,
-            )
-        except FileNotFoundError as exc:
-            raise ProviderError(f"Provider command not found for {self.name}: {command[0]}") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise ProviderError(f"Provider {self.name} timed out after {timeout}s") from exc
-
-        output = completed.stdout.strip()
-        stderr = completed.stderr.strip()
-        if completed.returncode != 0:
-            detail = stderr or output or f"exit code {completed.returncode}"
-            raise ProviderError(f"Provider {self.name} failed: {detail}")
-        if stderr:
-            output = f"{output}\n\n[stderr]\n{stderr}" if output else f"[stderr]\n{stderr}"
         return AgentResult(content=output or "(provider returned no output)")
-
-    def _command(self) -> list[str]:
-        raw = self.config.get("command")
-        if not raw:
-            raise ProviderError(f"Provider {self.name} has no command configured")
-        if isinstance(raw, str):
-            return shlex.split(raw)
-        return [str(item) for item in raw]
-
-    def _base_env(self) -> dict[str, str]:
-        policy = self.config.get("env_policy", "minimal")
-        if policy == "inherit":
-            return os.environ.copy()
-        if policy != "minimal":
-            raise ProviderError(f"Unsupported env_policy for {self.name}: {policy}")
-        passthrough = self.config.get("env_passthrough", _DEFAULT_ENV_PASSTHROUGH)
-        return {
-            key: os.environ[key]
-            for key in passthrough
-            if key in os.environ
-        }
 
     def _cwd(self, context: AgentContext) -> Path:
         mode = self.config.get("cwd", "workspace")
@@ -172,6 +114,182 @@ class ProcessProvider(Provider):
         return Path(mode).resolve()
 
 
+def run_process_prompt(
+    name: str,
+    provider_config: dict[str, Any],
+    prompt: str,
+    *,
+    cwd: Path,
+    env_overrides: dict[str, str] | None = None,
+    prompt_path: Path | None = None,
+    stderr_path: Path | None = None,
+) -> str:
+    command = _provider_command(provider_config, name)
+    prompt_mode = provider_config.get("prompt_mode", "stdin")
+    timeout = int(provider_config.get("timeout_seconds", 1800))
+    encoding = str(provider_config.get("encoding", "utf-8"))
+
+    stdin: bytes | None = None
+    if prompt_mode == "stdin":
+        try:
+            stdin = prompt.encode(encoding)
+        except (LookupError, UnicodeEncodeError) as exc:
+            raise ProviderError(f"Provider {name} prompt is not valid {encoding}: {exc}") from exc
+        args = command
+    elif prompt_mode == "arg":
+        args = [*command, prompt]
+    elif prompt_mode == "file":
+        file_path = prompt_path or cwd / "prompt.md"
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(prompt, encoding="utf-8")
+        args = [*command, str(file_path)]
+    else:
+        raise ProviderError(f"Unsupported prompt_mode for {name}: {prompt_mode}")
+
+    cwd.mkdir(parents=True, exist_ok=True)
+    env = _process_base_env(name, provider_config)
+    env.update({str(key): str(value) for key, value in provider_config.get("env", {}).items()})
+    env.update(env_overrides or {})
+    process_args = _platform_process_args(args)
+    try:
+        completed = _run_managed_process(
+            process_args,
+            stdin=stdin,
+            cwd=str(cwd),
+            env=env,
+            timeout=timeout,
+        )
+    except FileNotFoundError as exc:
+        raise ProviderError(f"Provider command not found for {name}: {command[0]}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ProviderError(f"Provider {name} timed out after {timeout}s") from exc
+    except OSError as exc:
+        raise ProviderError(f"Provider {name} could not start: {exc}") from exc
+
+    output = _decode_process_stream(name, "stdout", completed.stdout, encoding).strip()
+    stderr = _decode_process_stream(name, "stderr", completed.stderr, encoding).strip()
+    if completed.returncode != 0:
+        if stderr and stderr_path is not None:
+            _write_process_stderr(stderr_path, stderr)
+            detail = f"exit code {completed.returncode}; stderr logged separately"
+        else:
+            detail = stderr or output or f"exit code {completed.returncode}"
+        raise ProviderError(f"Provider {name} failed: {detail}")
+    if stderr:
+        if stderr_path is not None:
+            _write_process_stderr(stderr_path, stderr)
+        else:
+            output = f"{output}\n\n[stderr]\n{stderr}" if output else f"[stderr]\n{stderr}"
+    return output
+
+
+def _provider_command(provider_config: dict[str, Any], name: str) -> list[str]:
+    raw = provider_config.get("command")
+    if not raw:
+        raise ProviderError(f"Provider {name} has no command configured")
+    if isinstance(raw, str):
+        return shlex.split(raw)
+    return [str(item) for item in raw]
+
+
+def _platform_process_args(command: list[str]) -> list[str]:
+    if os.name != "nt":
+        return command
+    resolved = shutil.which(command[0])
+    if not resolved or Path(resolved).suffix.lower() not in {".cmd", ".bat"}:
+        return command
+    comspec = os.environ.get("ComSpec") or os.environ.get("COMSPEC") or "cmd.exe"
+    script_command = subprocess.list2cmdline([resolved, *command[1:]])
+    return [comspec, "/d", "/s", "/c", script_command]
+
+
+def _run_managed_process(
+    args: list[str],
+    *,
+    stdin: bytes | None,
+    cwd: str,
+    env: dict[str, str],
+    timeout: int,
+) -> subprocess.CompletedProcess[bytes]:
+    options: dict[str, Any] = {}
+    if os.name == "nt":
+        options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        options["start_new_session"] = True
+    process = subprocess.Popen(
+        args,
+        stdin=subprocess.PIPE if stdin is not None else None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=cwd,
+        env=env,
+        **options,
+    )
+    try:
+        stdout, stderr = process.communicate(input=stdin, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _terminate_process_tree(process)
+        try:
+            process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+        raise
+    return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
+
+
+def _terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=1)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    if process.poll() is None:
+        process.kill()
+
+
+def _decode_process_stream(name: str, stream: str, value: bytes | str | None, encoding: str) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return value.decode(encoding)
+    except (LookupError, UnicodeDecodeError) as exc:
+        raise ProviderError(
+            f"Provider {name} {stream} is not valid {encoding}: {exc}"
+        ) from exc
+
+
+def _write_process_stderr(path: Path, stderr: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(stderr + "\n", encoding="utf-8")
+
+
+def _process_base_env(name: str, provider_config: dict[str, Any]) -> dict[str, str]:
+    policy = provider_config.get("env_policy", "minimal")
+    if policy == "inherit":
+        return os.environ.copy()
+    if policy != "minimal":
+        raise ProviderError(f"Unsupported env_policy for {name}: {policy}")
+    passthrough = provider_config.get("env_passthrough", _DEFAULT_ENV_PASSTHROUGH)
+    return {key: os.environ[key] for key in passthrough if key in os.environ}
+
+
 def build_prompt(context: AgentContext) -> str:
     agent = context.agent
     agent_profile = _read_agent_profile(context)
@@ -181,6 +299,7 @@ def build_prompt(context: AgentContext) -> str:
     inbox = "\n".join(f"- {path.name}: {path}" for path in context.inbox_files)
     if not inbox:
         inbox = "- none"
+    original_task = _original_task_section(context)
     return f"""You are the AT `{agent}` agent.
 
 Agent Contract (`agent.md`):
@@ -197,9 +316,7 @@ Context Contract (`context.json`):
 
 Task:
 {_task_for_prompt(context)}
-
-Original User Task:
-{context.session.task}
+{original_task}
 
 Boundaries:
 - Follow the agent contract above as the primary role and boundary definition.
@@ -220,6 +337,14 @@ def _task_for_prompt(context: AgentContext) -> str:
     if isinstance(task_runtime, str) and task_runtime.strip():
         return task_runtime.strip()
     return context.session.task
+
+
+def _original_task_section(context: AgentContext) -> str:
+    language = context.language or {}
+    input_translation = language.get("input_translation", {})
+    if isinstance(input_translation, dict) and input_translation.get("status") == "completed":
+        return ""
+    return f"\nOriginal User Task:\n{context.session.task}\n"
 
 
 _MOCK_SECTIONS: dict[str, list[str]] = {
@@ -266,7 +391,7 @@ def _mock_artifact(context: AgentContext, inbox: str) -> str:
         f"# {context.agent} artifact",
         "",
         f"Session: {context.session.id}",
-        f"Task: {context.session.task}",
+        f"Task: {_task_for_prompt(context)}",
         f"Role: {ROLE_GOALS.get(context.agent, context.agent)}",
         f"Context contract: {context.agent_context_path}",
         "",

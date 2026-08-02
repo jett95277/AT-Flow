@@ -10,6 +10,21 @@ def validate_artifact_contract(agent: str, output_contract: str, artifact: str) 
     return [section for section in required if _normalize_heading(section) not in present]
 
 
+def validate_runtime_artifact_language(artifact: str, runtime_language: str) -> list[str]:
+    if runtime_language != "en":
+        return []
+    violations: list[str] = []
+    in_fence = False
+    for line_number, raw_line in enumerate(artifact.splitlines(), start=1):
+        line = raw_line.strip()
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not in_fence and any("\u3400" <= character <= "\u9fff" for character in line):
+            violations.append(f"line {line_number} contains CJK narrative")
+    return violations
+
+
 def _required_sections(output_contract: str) -> list[str]:
     sections: list[str] = []
     collecting = False

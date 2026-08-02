@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make AT Flow explicitly detect and surface Codex provider capability so the system does not pretend a GPT/OpenAI API call is equivalent to mature Codex code-agent execution.
+**Goal:** Make AT Flow explicitly detect and surface Codex provider capability,
+then complete the V1.8 language path without pretending that a GPT/OpenAI API
+call is equivalent to mature Codex code-agent execution.
 
 **Architecture:** Provider availability is checked by the AT runtime without executing arbitrary agent work. The FastAPI doctor endpoint exposes provider capability checks, and the Web Console displays them as runtime diagnostics. Codex remains a process provider behind AT's state, artifact, trace, audit, and permission contracts.
 
@@ -71,11 +73,29 @@ npm.cmd run build
 
 If Windows sandbox blocks `web/dist`, rerun build with explicit elevated approval and record the reason.
 
+## Corrective Remediation
+
+The original V1.8 scope only proved executable discovery and diagnostics. It did
+not implement the promised Chinese-input/English-runtime/Chinese-display flow,
+and the canonical Agent packages still appeared under the shared area.
+
+The corrective plan is tracked separately in:
+
+```text
+docs/superpowers/plans/2026-08-02-at-v1-8-language-and-agent-layout-remediation-plan.md
+```
+
+That remediation owns:
+
+- canonical Agent packages under `.at/agents`;
+- explicit migration from the legacy `.at/shared/agents` layout;
+- Language Contract V2 and a restricted translation provider boundary;
+- English-only runtime prompts, contexts, artifacts, and handoffs;
+- Chinese display artifacts and visible no-fallback failure states;
+- Web Console language status and structured artifact APIs.
+
 ## Completion
 
-Commit after verification:
-
-```powershell
-git add docs/superpowers/plans/2026-08-02-at-v1-8-codex-capability-implementation-plan.md src/at_flow/providers.py src/at_flow/inspectors.py tests/test_provider_capabilities.py tests/test_web_api.py web/src/api/types.ts web/src/components/AppShell.tsx web/src/components/RuntimeEvidence.tsx web/src/components/RuntimeEvidence.test.tsx
-git commit -m "feat: add v1.8 codex capability checks"
-```
+V1.8 is complete only after both this capability plan and the corrective
+remediation plan pass their full verification. Git operations are handled in a
+separate development window.

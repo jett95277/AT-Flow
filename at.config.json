@@ -1,7 +1,7 @@
 {
   "workspace": {
     "shared_dir": ".at/shared",
-    "agents_dir": ".at/shared/agents",
+    "agents_dir": ".at/agents",
     "sessions_dir": ".at/sessions",
     "projects_dir": ".at/projects"
   },
@@ -11,6 +11,29 @@
     "code",
     "test"
   ],
+  "language": {
+    "enabled": true,
+    "source": "auto",
+    "runtime": "en",
+    "display": "zh",
+    "translation_provider": "codex",
+    "translation_provider_overrides": {
+      "command": [
+        "codex",
+        "exec",
+        "--skip-git-repo-check",
+        "--sandbox",
+        "read-only",
+        "--ephemeral",
+        "--color",
+        "never",
+        "-"
+      ],
+      "timeout_seconds": 180
+    },
+    "required": true,
+    "translate_artifacts": true
+  },
   "agent_providers": {
     "main": "mock",
     "analysis": "mock",
@@ -27,6 +50,7 @@
         "codex"
       ],
       "prompt_mode": "stdin",
+      "encoding": "utf-8",
       "cwd": "workspace",
       "env_policy": "minimal",
       "env_passthrough": [
@@ -50,6 +74,7 @@
         "opencode"
       ],
       "prompt_mode": "stdin",
+      "encoding": "utf-8",
       "cwd": "workspace",
       "env_policy": "minimal",
       "env_passthrough": [

@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import sys
 import tempfile
 import unittest
@@ -87,7 +88,7 @@ class RuntimeServiceTests(unittest.TestCase):
             self.assertEqual(len(reports), 1)
             self.assertEqual(reports[0]["agent"], "main")
 
-    def test_get_artifact_returns_agent_artifact_text(self):
+    def test_get_artifact_returns_structured_source_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace = ATWorkspace.init(Path(directory))
             session = SessionState.new(
@@ -100,9 +101,45 @@ class RuntimeServiceTests(unittest.TestCase):
             workspace.create_session(session)
             Runner(workspace).run(session.id)
 
-            text = RuntimeService(workspace).get_artifact("artifact-session", "main")
+            artifact = RuntimeService(workspace).get_artifact("artifact-session", "main")
 
-            self.assertIn("## Task Summary", text)
+            self.assertIn("## Task Summary", artifact["source"])
+            self.assertIsNone(artifact["display"])
+            self.assertEqual(artifact["source_language"], "en")
+            self.assertEqual(artifact["display_status"], "disabled")
+
+    def test_agent_display_artifact_remains_completed_after_later_translation_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            session = SessionState.new(
+                task="demo",
+                project_path=workspace.projects_root / "default",
+                provider="mock",
+                pipeline=["main"],
+                session_id="completed-display-session",
+            )
+            workspace.create_session(session)
+            Runner(workspace).run(session.id)
+            outbox = workspace.session_agent_outbox_dir(session.id, "main")
+            (outbox / "artifact.zh.md").write_text("# 中文产物\n", encoding="utf-8")
+            language_path = workspace.session_dir(session.id) / "language.json"
+            language = json.loads(language_path.read_text(encoding="utf-8"))
+            language["display_translation"] = {
+                "status": "failed",
+                "provider": "codex",
+                "error": "later Agent translation failed",
+                "updated_at": "2026-08-02T00:00:00+00:00",
+            }
+            language_path.write_text(
+                json.dumps(language, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            artifact = RuntimeService(workspace).get_artifact(session.id, "main")
+
+            self.assertEqual(artifact["display"], "# 中文产物\n")
+            self.assertEqual(artifact["display_status"], "completed")
+            self.assertIsNone(artifact["display_error"])
 
     def test_get_artifact_returns_empty_text_when_agent_has_no_artifact_yet(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -116,9 +153,28 @@ class RuntimeServiceTests(unittest.TestCase):
             )
             workspace.create_session(session)
 
-            text = RuntimeService(workspace).get_artifact("pending-artifact-session", "main")
+            artifact = RuntimeService(workspace).get_artifact("pending-artifact-session", "main")
 
-            self.assertEqual(text, "")
+            self.assertEqual(artifact["source"], "")
+            self.assertIsNone(artifact["display"])
+
+    def test_get_language_returns_profile_before_session_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            session = SessionState.new(
+                task="任务",
+                project_path=workspace.projects_root / "default",
+                provider="mock",
+                pipeline=["main"],
+                session_id="language-view-session",
+            )
+            workspace.create_session(session)
+
+            language = RuntimeService(workspace).get_language(session.id)
+
+            self.assertEqual(language["schema_version"], 2)
+            self.assertEqual(language["task_original"], "任务")
+            self.assertEqual(language["input_translation"]["status"], "disabled")
 
 
 if __name__ == "__main__":

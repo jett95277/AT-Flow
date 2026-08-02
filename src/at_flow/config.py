@@ -11,11 +11,21 @@ CONFIG_NAME = "at.config.json"
 DEFAULT_CONFIG: dict[str, Any] = {
     "workspace": {
         "shared_dir": ".at/shared",
-        "agents_dir": ".at/shared/agents",
+        "agents_dir": ".at/agents",
         "sessions_dir": ".at/sessions",
         "projects_dir": ".at/projects",
     },
     "pipeline": ["main", "analysis", "code", "test"],
+    "language": {
+        "enabled": False,
+        "source": "auto",
+        "runtime": "en",
+        "display": "zh",
+        "translation_provider": "",
+        "translation_provider_overrides": {},
+        "required": True,
+        "translate_artifacts": True,
+    },
     "providers": {
         "mock": {
             "type": "mock",
@@ -24,6 +34,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "type": "process",
             "command": ["codex"],
             "prompt_mode": "stdin",
+            "encoding": "utf-8",
             "cwd": "workspace",
             "env_policy": "minimal",
             "env_passthrough": [
@@ -45,6 +56,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "type": "process",
             "command": ["opencode"],
             "prompt_mode": "stdin",
+            "encoding": "utf-8",
             "cwd": "workspace",
             "env_policy": "minimal",
             "env_passthrough": [

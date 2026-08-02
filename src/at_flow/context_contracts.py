@@ -20,7 +20,7 @@ def build_agent_context_contract(context: "AgentContext") -> dict[str, Any]:
     return {
         "schema_version": CONTEXT_SCHEMA_VERSION,
         "session_id": context.session.id,
-        "task": context.session.task,
+        "task": _runtime_task(context),
         "agent": context.agent,
         "step_index": context.step_index,
         "current_stage": context.session.current_stage,
@@ -54,9 +54,32 @@ def build_agent_context_contract(context: "AgentContext") -> dict[str, Any]:
             "shared_docs": _authorized_shared_files(context, read_permissions, "shared_docs", "docs"),
             "shared_inbox": _authorized_shared_files(context, read_permissions, "shared_inbox", "inbox"),
         },
-        "language": context.language or {},
+        "language": runtime_language_view(context.language or {}),
         "input_paths": [str(item.resolve()) for item in context.inbox_files],
     }
+
+
+def runtime_language_view(language: dict[str, Any]) -> dict[str, Any]:
+    input_translation = language.get("input_translation", {})
+    return {
+        "schema_version": language.get("schema_version"),
+        "source_language": language.get("source_language"),
+        "runtime_language": language.get("runtime_language"),
+        "display_language": language.get("display_language"),
+        "task_runtime": language.get("task_runtime"),
+        "input_translation": {
+            "status": input_translation.get("status") if isinstance(input_translation, dict) else None,
+            "provider": input_translation.get("provider") if isinstance(input_translation, dict) else None,
+        },
+    }
+
+
+def _runtime_task(context: "AgentContext") -> str:
+    language = context.language or {}
+    task_runtime = language.get("task_runtime")
+    if isinstance(task_runtime, str) and task_runtime.strip():
+        return task_runtime.strip()
+    return context.session.task
 
 
 def write_agent_context_contract(context: "AgentContext") -> Path:

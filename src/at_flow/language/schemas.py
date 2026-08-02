@@ -4,7 +4,23 @@ from dataclasses import dataclass
 from typing import Any
 
 
-LANGUAGE_SCHEMA_VERSION = 1
+LANGUAGE_SCHEMA_VERSION = 2
+
+
+@dataclass(frozen=True)
+class TranslationState:
+    status: str
+    provider: str
+    error: str | None
+    updated_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "provider": self.provider,
+            "error": self.error,
+            "updated_at": self.updated_at,
+        }
 
 
 @dataclass(frozen=True)
@@ -15,9 +31,8 @@ class LanguageProfile:
     artifact_mode: str
     task_original: str
     task_runtime: str
-    display_summary: str
-    translation_status: str = "pending"
-    translation_provider: str = "none"
+    input_translation: TranslationState
+    display_translation: TranslationState
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -28,7 +43,6 @@ class LanguageProfile:
             "artifact_mode": self.artifact_mode,
             "task_original": self.task_original,
             "task_runtime": self.task_runtime,
-            "display_summary": self.display_summary,
-            "translation_status": self.translation_status,
-            "translation_provider": self.translation_provider,
+            "input_translation": self.input_translation.to_dict(),
+            "display_translation": self.display_translation.to_dict(),
         }

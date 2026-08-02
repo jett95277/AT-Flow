@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "read": {
+    "shared_memory": true,
+    "shared_skills": true,
+    "shared_inbox": true,
+    "project": true,
+    "inbox": true
+  },
+  "write": {
+    "agent_workspace": true,
+    "agent_outbox": true,
+    "project": true,
+    "shared": false,
+    "other_agents": false,
+    "session_control": false,
+    "proposals": true
+  },
+  "audit": {
+    "fail_on_project_change": false,
+    "fail_on_shared_change": true,
+    "fail_on_other_agent_change": true,
+    "fail_on_session_control_change": true
+  },
+  "agent": "code"
+}

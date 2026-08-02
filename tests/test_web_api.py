@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import os
 import sys
 import tempfile
@@ -161,7 +162,11 @@ class WebApiTests(unittest.TestCase):
             self.assertEqual(audit.status_code, 200)
             self.assertEqual(audit.json()["audit"][0]["agent"], "main")
             self.assertEqual(artifact.status_code, 200)
-            self.assertIn("## Task Summary", artifact.json()["artifact"])
+            self.assertIn("## Task Summary", artifact.json()["source"])
+            self.assertIsNone(artifact.json()["display"])
+            language = client.get("/api/sessions/evidence-session/language")
+            self.assertEqual(language.status_code, 200)
+            self.assertEqual(language.json()["schema_version"], 2)
 
     def test_artifact_endpoint_returns_empty_artifact_for_pending_agent(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -179,7 +184,8 @@ class WebApiTests(unittest.TestCase):
             response = client.get("/api/sessions/pending-artifact-session/artifact/main")
 
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json()["artifact"], "")
+            self.assertEqual(response.json()["source"], "")
+            self.assertIsNone(response.json()["display"])
 
     def test_workspace_tree_returns_safe_nodes(self):
         with tempfile.TemporaryDirectory() as directory:

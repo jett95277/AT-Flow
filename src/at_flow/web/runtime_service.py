@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Callable
 
 from .errors import ApiError
-from .schemas import CommandResultResponse
+from .schemas import ArtifactViewResponse, CommandResultResponse
 from ..engine import Runner
 from ..inspectors import session_artifact_text, session_audit_summary, session_trace_summary
+from ..language.adapter import build_language_profile
 from ..models import SessionState
+from ..providers import check_provider_capability, resolve_agent_provider
 from ..workspace import ATWorkspace, WorkspaceError
 
 
@@ -30,8 +33,11 @@ class RuntimeService:
             lambda: self._load_session_then(session_id, lambda: session_audit_summary(self.workspace, session_id))
         )
 
-    def get_artifact(self, session_id: str, agent: str) -> str:
-        return self._map_workspace_error(lambda: self._load_optional_artifact(session_id, agent))
+    def get_artifact(self, session_id: str, agent: str) -> dict[str, Any]:
+        return self._map_workspace_error(lambda: self._artifact_view(session_id, agent))
+
+    def get_language(self, session_id: str) -> dict[str, Any]:
+        return self._map_workspace_error(lambda: self._language_profile(session_id))
 
     def create_session(
         self,
@@ -74,6 +80,30 @@ class RuntimeService:
             if str(exc).startswith("No artifact or failure"):
                 return ""
             raise
+
+    def _language_profile(self, session_id: str) -> dict[str, Any]:
+        session = self.workspace.load_session(session_id)
+        path = self.workspace.session_dir(session_id) / "language.json"
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+        return build_language_profile(self.workspace.config, session).to_dict()
+
+    def _artifact_view(self, session_id: str, agent: str) -> dict[str, Any]:
+        source = self._load_optional_artifact(session_id, agent)
+        language = self._language_profile(session_id)
+        display_path = self.workspace.session_agent_outbox_dir(session_id, agent) / "artifact.zh.md"
+        display = display_path.read_text(encoding="utf-8") if display_path.is_file() else None
+        state = language.get("display_translation", {})
+        display_completed = display is not None
+        return ArtifactViewResponse(
+            source=source,
+            display=display,
+            source_language=str(language.get("runtime_language") or language.get("source_language") or "unknown"),
+            display_language=str(language.get("display_language") or "unknown"),
+            display_status="completed" if display_completed else str(state.get("status") or "disabled"),
+            display_provider=str(state.get("provider") or "none"),
+            display_error=None if display_completed else str(state["error"]) if state.get("error") else None,
+        ).to_dict()
 
     def _map_workspace_error(self, callback: Callable[[], Any]) -> Any:
         try:

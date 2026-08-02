@@ -271,6 +271,27 @@ class RuntimeContractsTests(unittest.TestCase):
             events = read_trace_events(workspace.session_dir(session.id) / "trace.jsonl")
             self.assertIn("recover_interrupted_step", [event["event"] for event in events])
 
+    def test_runner_reclaims_dead_pid_lock_before_interrupted_step_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            session = SessionState.new(
+                task="recover stale lock",
+                project_path=workspace.projects_root / "demo",
+                provider="mock",
+                pipeline=["main"],
+            )
+            workspace.create_session(session)
+            transition_step(session, 0, "running")
+            workspace.save_session(session)
+            lock_path = workspace.session_dir(session.id) / ".lock"
+            lock_path.write_text("99999999", encoding="utf-8")
+
+            recovered = Runner(workspace).run(session.id)
+
+            self.assertTrue(recovered.has_failed())
+            self.assertEqual(recovered.steps[0].status, "failed")
+            self.assertFalse(lock_path.exists())
+
 
 def _provider(script: Path) -> dict[str, object]:
     return {

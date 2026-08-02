@@ -56,3 +56,25 @@ class FileNodeResponse:
             "kind": self.kind,
             "children": [child.to_dict() for child in self.children],
         }
+
+
+@dataclass(frozen=True)
+class ArtifactViewResponse:
+    source: str
+    display: str | None
+    source_language: str
+    display_language: str
+    display_status: str
+    display_provider: str
+    display_error: str | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "source": self.source,
+            "display": self.display,
+            "source_language": self.source_language,
+            "display_language": self.display_language,
+            "display_status": self.display_status,
+            "display_provider": self.display_provider,
+            "display_error": self.display_error,
+        }

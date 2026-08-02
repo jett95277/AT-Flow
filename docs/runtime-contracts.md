@@ -134,11 +134,19 @@ Process providers such as Codex CLI and opencode must follow this boundary:
   `input.json`, and `prompt.md`.
 - The provider current working directory is the agent private `workspace`.
 - The provider receives the prompt through the configured `prompt_mode`.
+- Process stdin/stdout/stderr use configured `encoding` (`utf-8` by default);
+  invalid bytes fail explicitly instead of using locale guessing or replacement.
 - The provider receives a minimal environment by default.
 - The provider returns text output; AT collects it into `outbox/artifact.md`.
 - The provider cannot advance AT state directly.
 - The provider cannot mutate shared memory directly; it can only write proposals.
 - AT audits filesystem changes after the provider returns.
+
+On Windows, AT resolves `.cmd` and `.bat` provider shims and invokes them through
+`cmd.exe`. Each provider runs in an AT-owned process group. Timeout handling
+signals the group and terminates the remaining child tree before returning a
+typed provider error, so Node/Codex descendants do not continue in the
+background.
 
 Codex is the preferred mature code-agent provider for implementation and
 verification work, but AT remains the orchestrator. `agent.md` restricts role
@@ -155,9 +163,78 @@ Provider selection has two modes:
 
 AT must not silently override an explicit session provider with an agent route.
 
-When `language.json` contains `task_runtime`, AT uses it as the primary `Task`
-inside provider prompts. The original user task is preserved separately as
-`Original User Task` and in `language.task_original`.
+When Language Contract V2 contains a completed `task_runtime`, AT uses it as the
+only task inside provider prompts and provider-facing context. The original user
+task remains in Session state and `language.json`; it is not copied into
+`prompt.md` or `context.json`.
+
+## Language Contract V2
+
+V1.6 introduced the language-contract direction. V1.8 makes it executable,
+observable, and failure-aware.
+
+Every Session exposes:
+
+```text
+.at/sessions/<session-id>/language.json
+```
+
+Required fields include:
+
+- `schema_version: 2`
+- `source_language`, `runtime_language`, `display_language`
+- `task_original`, `task_runtime`
+- `input_translation`: status, provider, error, updated time
+- `display_translation`: status, provider, error, updated time
+
+The runtime path is:
+
+```text
+Chinese input -> English runtime -> English artifact/handoff -> Chinese display
+```
+
+Input translation is required when enabled and source differs from runtime. A
+failure marks the current step retryably failed before the Agent provider runs.
+Display translation runs only after `artifact.md` passes its contract. Its
+failure is recorded and exposed, while the valid English step remains done.
+
+Artifacts are separated by purpose:
+
+```text
+artifact.md      English source and downstream handoff
+artifact.zh.md   Chinese Web Console display derivative
+```
+
+The artifact API returns `source` and `display` separately. `display` is null
+unless translation completed; AT does not silently use English as Chinese.
+For a specific Agent, the existence of its validated `artifact.zh.md` is the
+completion fact even when a later Agent changes the Session-level display status
+to failed.
+
+Translation providers must be explicit process providers. The translation
+adapter forces stdin mode, a minimal environment, a translation-only working
+directory, and strips all `AT_*` passthrough variables. Current Codex translation
+uses `codex exec` with a read-only, ephemeral sandbox and a dedicated timeout.
+Successful stderr is retained as `provider.stderr.log`, never appended to the
+translated text.
+
+Translation instructions come from the platform skill
+`.at/shared/skills/language-translation/` (`SKILL.md` plus `glossary.md`).
+`ProcessTextTranslator` loads the skill as prompt instructions when the skill
+directory is attached; a missing `SKILL.md` raises
+`translation_skill_missing` (not retryable) and AT never falls back to the
+hard-coded prompt. `LanguageService` attaches the skill directory for both
+input and display translation.
+
+Fixed workspace documents (Agent `agent.md`, `output.md`) are shown in Chinese
+through reviewed static copies (`agent.zh.md`, `output.zh.md`). The document
+API defaults to `language=zh` and serves the copy when present; `language=en`
+returns the English source. The workspace tree hides `*.zh.md` copies whose
+source file exists. JSON configuration files are not translated.
+
+Language conversion adds provider calls and token cost: normally one input
+translation per Chinese Session and one display translation per completed Agent
+artifact. Completed input profiles and completed display artifacts are reused.
 
 ## Memory Contract
 
@@ -294,6 +371,10 @@ reused as the new attempt's evidence. AT recreates the standard `proposals/` and
 
 When `Runner.run()` loads a session that already contains a `running` step, AT
 treats that step as interrupted work from a previous process.
+
+If a hard process termination leaves `.lock`, AT reads the owner PID. A dead PID
+lock is reclaimed before recovery; a live or malformed lock is preserved and
+still rejects concurrent execution.
 
 Recovery behavior:
 
