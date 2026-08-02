@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -16,12 +17,15 @@ from ..inspectors import doctor_checks
 from ..workspace import ATWorkspace
 
 
+_DEFAULT_ALLOWED_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+
 def create_app(root: Path | str = ".") -> FastAPI:
     app = FastAPI(title="AT Flow Web Console API")
     workspace_root = Path(root).resolve()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_origins=_allowed_origins_from_env(),
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
@@ -130,6 +134,12 @@ def create_app(root: Path | str = ".") -> FastAPI:
         }
 
     return app
+
+
+def _allowed_origins_from_env() -> list[str]:
+    raw = os.environ.get("AT_ALLOWED_ORIGINS", "")
+    origins = [item.strip() for item in raw.split(",") if item.strip()]
+    return origins or list(_DEFAULT_ALLOWED_ORIGINS)
 
 
 def _require_workspace(root: Path) -> ATWorkspace:

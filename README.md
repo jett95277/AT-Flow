@@ -174,6 +174,12 @@ http://127.0.0.1:3000/runtime
 http://localhost:8000
 ```
 
+## Cloud Deployment
+
+V1.7 deployment instructions are in `deploy/README.md`. The supported cloud
+demo path is the Web Console with the `mock` provider behind Nginx, HTTPS,
+systemd, and SQLite persistence.
+
 ## Web Console 界面
 
 V1.5 控制台优先服务工程演示和调试：

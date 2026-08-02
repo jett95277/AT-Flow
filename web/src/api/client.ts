@@ -32,7 +32,7 @@ export class AtApiClient {
   private readonly baseUrl: string;
   private readonly fetcher: FetchLike;
 
-  constructor(baseUrl = defaultBaseUrl(), fetcher: FetchLike = defaultFetcher()) {
+  constructor(baseUrl = getDefaultApiBaseUrl(), fetcher: FetchLike = defaultFetcher()) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.fetcher = fetcher;
   }
@@ -119,7 +119,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return body as T;
 }
 
-function defaultBaseUrl(): string {
+export function getDefaultApiBaseUrl(): string {
   return import.meta.env.VITE_AT_API_BASE_URL || "http://localhost:8000";
 }
 

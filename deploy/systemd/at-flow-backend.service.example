@@ -1,0 +1,16 @@
+[Unit]
+Description=AT Flow FastAPI Backend
+After=network.target
+
+[Service]
+Type=simple
+User=atflow
+Group=atflow
+WorkingDirectory=/opt/at-flow
+EnvironmentFile=/etc/at-flow/at-flow.env
+ExecStart=/opt/at-flow/.venv/bin/python -m at_flow.web --root /opt/at-flow --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -3,6 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import { AtApiClient } from "./client";
 
 describe("AtApiClient", () => {
+  it("uses same-origin api base when VITE_AT_API_BASE_URL is configured", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_AT_API_BASE_URL", "/api");
+    const { getDefaultApiBaseUrl } = await import("./client");
+
+    expect(getDefaultApiBaseUrl()).toBe("/api");
+  });
+
   it("getHealth calls /api/health and returns parsed JSON", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

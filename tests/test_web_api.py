@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sys
 import tempfile
 import unittest
@@ -43,6 +44,30 @@ class WebApiTests(unittest.TestCase):
 
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.headers["access-control-allow-origin"], "http://localhost:3000")
+
+    def test_cors_accepts_configured_cloud_origin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ATWorkspace.init(Path(directory))
+            previous = os.environ.get("AT_ALLOWED_ORIGINS")
+            os.environ["AT_ALLOWED_ORIGINS"] = "https://at.example.com,http://localhost:3000"
+            try:
+                client = TestClient(create_app(directory))
+            finally:
+                if previous is None:
+                    os.environ.pop("AT_ALLOWED_ORIGINS", None)
+                else:
+                    os.environ["AT_ALLOWED_ORIGINS"] = previous
+
+            response = client.options(
+                "/api/health",
+                headers={
+                    "Origin": "https://at.example.com",
+                    "Access-Control-Request-Method": "GET",
+                },
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers["access-control-allow-origin"], "https://at.example.com")
 
     def test_health_maps_missing_workspace_to_runtime_not_initialized(self):
         with tempfile.TemporaryDirectory() as directory:
