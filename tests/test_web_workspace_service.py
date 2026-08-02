@@ -86,6 +86,111 @@ class WorkspaceServiceTests(unittest.TestCase):
             self.assertIn("main", text.lower())
             self.assertNotIn("agent.zh.md", text)
 
+    def test_read_file_translates_session_document_on_demand(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            workspace.config["language"].update(
+                {
+                    "enabled": True,
+                    "source": "zh",
+                    "runtime": "en",
+                    "display": "zh",
+                    "translation_provider": "test-translator",
+                }
+            )
+            session_dir = workspace.session_dir("s1")
+            prompt_dir = session_dir / "agents" / "main"
+            prompt_dir.mkdir(parents=True)
+            source = prompt_dir / "prompt.md"
+            source.write_text("Implement the login module", encoding="utf-8")
+            calls = []
+
+            class FakeTranslator:
+                name = "test-translator"
+
+                def translate(self, text, source_language, target_language, purpose):
+                    calls.append((text, source_language, target_language, purpose))
+                    return "实现登录模块"
+
+            service = WorkspaceService(
+                workspace, translator_factory=lambda config, name, work_dir: FakeTranslator()
+            )
+
+            zh_text = service.read_file("sessions/s1/agents/main/prompt.md")
+
+            self.assertEqual(zh_text, "实现登录模块\n")
+            self.assertEqual(calls[0][1:], ("en", "zh", "document"))
+            self.assertTrue((prompt_dir / "prompt.zh.md").is_file())
+
+            second = service.read_file("sessions/s1/agents/main/prompt.md")
+            self.assertEqual(second, "实现登录模块\n")
+            self.assertEqual(len(calls), 1)
+
+    def test_read_file_session_translation_failure_raises_typed_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            workspace.config["language"].update(
+                {
+                    "enabled": True,
+                    "source": "zh",
+                    "runtime": "en",
+                    "display": "zh",
+                    "translation_provider": "test-translator",
+                }
+            )
+            session_dir = workspace.session_dir("s1")
+            prompt_dir = session_dir / "agents" / "main"
+            prompt_dir.mkdir(parents=True)
+            (prompt_dir / "prompt.md").write_text("Implement the login module", encoding="utf-8")
+
+            class FailingTranslator:
+                name = "test-translator"
+
+                def translate(self, text, source_language, target_language, purpose):
+                    from at_flow.language.translator import TranslationError
+
+                    raise TranslationError("translation_process_failed", "offline", retryable=True)
+
+            service = WorkspaceService(
+                workspace, translator_factory=lambda config, name, work_dir: FailingTranslator()
+            )
+
+            with self.assertRaises(ApiError) as raised:
+                service.read_file("sessions/s1/agents/main/prompt.md")
+
+            self.assertEqual(raised.exception.code, "display_translation_failed")
+            self.assertTrue(raised.exception.retryable)
+            self.assertFalse((prompt_dir / "prompt.zh.md").exists())
+
+    def test_read_file_session_document_language_en_returns_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            session_dir = workspace.session_dir("s1")
+            prompt_dir = session_dir / "agents" / "main"
+            prompt_dir.mkdir(parents=True)
+            source = prompt_dir / "prompt.md"
+            source.write_text("Implement the login module", encoding="utf-8")
+
+            service = WorkspaceService(workspace)
+
+            text = service.read_file("sessions/s1/agents/main/prompt.md", language="en")
+
+            self.assertIn("Implement the login module", text)
+            self.assertFalse((prompt_dir / "prompt.zh.md").exists())
+
+    def test_workspace_tree_hides_session_translation_copies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            prompt_dir = workspace.session_dir("s1") / "agents" / "main"
+            prompt_dir.mkdir(parents=True)
+            (prompt_dir / "prompt.md").write_text("Implement the login module", encoding="utf-8")
+            (prompt_dir / "prompt.zh.md").write_text("实现登录模块", encoding="utf-8")
+
+            paths = {node.path for node in flatten(WorkspaceService(workspace).tree())}
+
+            self.assertIn("sessions/s1/agents/main/prompt.md", paths)
+            self.assertNotIn("sessions/s1/agents/main/prompt.zh.md", paths)
+
     def test_read_file_rejects_path_traversal(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace = ATWorkspace.init(Path(directory))

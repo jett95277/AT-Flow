@@ -2,6 +2,7 @@
 .at/projects/
 .at/web/
 .at/cache/
+.at/translation/
 .at/*.log
 .at/*.sqlite3
 .codex-analysis/
