@@ -327,6 +327,15 @@ Boundaries:
 - Write the stable result to `outbox/artifact.md`.
 - Put shared memory, skill, or policy update requests under `outbox/proposals/`.
 
+Artifact output rules:
+- Your final response is captured verbatim as the artifact; write the artifact file
+  at `outbox/artifact.md` and make your final message contain only that artifact.
+- The artifact must be written entirely in the runtime language (English), except
+  for code, identifiers, file paths, and proper nouns.
+- Do not add any preamble, process summary, thinking, or Chinese narrative before
+  or inside the artifact. Start directly with `# {agent} artifact`.
+- Include every section required by the output contract; do not skip or rename them.
+
 Inbox files:
 {inbox}
 """

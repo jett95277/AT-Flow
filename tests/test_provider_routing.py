@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from at_flow.providers import resolve_agent_provider
+from at_flow.providers import AgentContext, build_prompt
 from at_flow.engine import Runner
 from at_flow.models import SessionState
 from at_flow.workspace import ATWorkspace
@@ -105,6 +106,41 @@ class ProviderRoutingTests(unittest.TestCase):
             )
             self.assertTrue(stderr_log.is_file())
             self.assertIn("PROVIDER_DIAGNOSTIC", stderr_log.read_text(encoding="utf-8"))
+
+    def test_build_prompt_enforces_english_artifact_rules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            session = SessionState.new(
+                task="english artifact",
+                project_path=workspace.projects_root / "default",
+                provider="auto",
+                pipeline=["main"],
+                session_id="prompt-rules-session",
+            )
+            workspace.create_session(session)
+            agent_dir = workspace.session_agent_dir("prompt-rules-session", "main")
+            context = AgentContext(
+                workspace_root=workspace.root,
+                shared_root=workspace.shared_root,
+                session_dir=workspace.session_dir("prompt-rules-session"),
+                agent_dir=agent_dir,
+                agent_inbox_dir=workspace.session_agent_inbox_dir("prompt-rules-session", "main"),
+                agent_outbox_dir=workspace.session_agent_outbox_dir("prompt-rules-session", "main"),
+                agent_workspace_dir=workspace.session_agent_workspace_dir("prompt-rules-session", "main"),
+                agent_profile_path=workspace.materialize_session_agent_profile("prompt-rules-session", "main"),
+                agent_permissions_path=workspace.materialize_session_agent_permissions("prompt-rules-session", "main"),
+                agent_output_path=workspace.materialize_session_agent_output("prompt-rules-session", "main"),
+                agent_context_path=workspace.session_context_path("prompt-rules-session", "main"),
+                project_path=workspace.projects_root / "default",
+                session=session,
+                step_index=0,
+            )
+
+            prompt = build_prompt(context)
+
+            self.assertIn("Artifact output rules", prompt)
+            self.assertIn("entirely in the runtime language (English)", prompt)
+            self.assertIn("Do not add any preamble", prompt)
 
 
 if __name__ == "__main__":
