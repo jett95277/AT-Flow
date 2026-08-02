@@ -195,6 +195,9 @@ Context Contract (`context.json`):
 {context_contract}
 
 Task:
+{_task_for_prompt(context)}
+
+Original User Task:
 {context.session.task}
 
 Boundaries:
@@ -208,6 +211,14 @@ Boundaries:
 Inbox files:
 {inbox}
 """
+
+
+def _task_for_prompt(context: AgentContext) -> str:
+    language = context.language or {}
+    task_runtime = language.get("task_runtime")
+    if isinstance(task_runtime, str) and task_runtime.strip():
+        return task_runtime.strip()
+    return context.session.task
 
 
 _MOCK_SECTIONS: dict[str, list[str]] = {
@@ -344,9 +355,16 @@ def make_provider(name: str, config: dict[str, Any]) -> Provider:
 
 
 def resolve_agent_provider(config: dict[str, Any], session_provider: str, agent: str) -> str:
+    if session_provider != "auto":
+        return session_provider
+
     routes = config.get("agent_providers", {})
     if isinstance(routes, dict):
         route = routes.get(agent)
         if isinstance(route, str) and route.strip():
             return route
-    return session_provider
+
+    default_provider = config.get("default_provider", "mock")
+    if isinstance(default_provider, str) and default_provider.strip():
+        return default_provider
+    return "mock"

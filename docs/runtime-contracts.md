@@ -146,6 +146,19 @@ and side effects; `permissions.json`, private workspace layout, context
 construction, audit, artifact validation, and transition rules enforce the hard
 boundary.
 
+Provider selection has two modes:
+
+- Explicit provider mode: `mock`, `codex`, or `opencode` means every agent step
+  uses that provider unless the session is changed explicitly.
+- Auto provider mode: `auto` means AT resolves each agent through
+  `agent_providers`; missing routes fall back to `default_provider` or `mock`.
+
+AT must not silently override an explicit session provider with an agent route.
+
+When `language.json` contains `task_runtime`, AT uses it as the primary `Task`
+inside provider prompts. The original user task is preserved separately as
+`Original User Task` and in `language.task_original`.
+
 ## Memory Contract
 
 Shared long-term memory is initialized under:

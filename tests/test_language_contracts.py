@@ -45,6 +45,35 @@ class LanguageContractTests(unittest.TestCase):
             self.assertIn("task_runtime", language)
             self.assertEqual(context["language"]["runtime_language"], "en")
 
+    def test_provider_prompt_uses_runtime_task_as_primary_task(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            workspace.config["language"] = {
+                "user": "zh",
+                "runtime": "en",
+                "display": "zh",
+                "artifact_mode": "bilingual",
+            }
+            session = SessionState.new(
+                task="帮我实现登录模块",
+                project_path=workspace.projects_root / "default",
+                provider="mock",
+                pipeline=["main"],
+                session_id="language-prompt-session",
+            )
+            workspace.create_session(session)
+
+            Runner(workspace).run("language-prompt-session", one_step=True)
+
+            prompt_path = workspace.session_agent_dir("language-prompt-session", "main") / "prompt.md"
+            prompt = prompt_path.read_text(encoding="utf-8")
+
+            task_section = prompt.split("Task:", 1)[1].split("Original User Task:", 1)[0]
+            self.assertIn("Execute this user task in English runtime context.", task_section)
+            self.assertIn("Original user task:", task_section)
+            self.assertIn("帮我实现登录模块", task_section)
+            self.assertIn("Original User Task:\n帮我实现登录模块", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,7 @@ type RunControlsProps = {
 
 const PROVIDERS = [
   { value: "mock", label: "mock" },
+  { value: "auto", label: "auto" },
   { value: "codex", label: "codex" },
   { value: "opencode", label: "opencode" }
 ];

@@ -32,6 +32,18 @@ describe("RunControls", () => {
 
     expect(actions.onProviderChange).toHaveBeenCalledWith("codex");
   });
+
+  it("offers explicit auto routing without changing the default mock mode", () => {
+    const actions = actionsMock();
+
+    render(<RunControls activeSessionId="s1" selectedProvider="mock" {...actions} />);
+
+    expect(screen.getByLabelText("Provider")).toHaveValue("mock");
+    expect(screen.getByRole("option", { name: "mock" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "auto" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "codex" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "opencode" })).toBeInTheDocument();
+  });
 });
 
 function actionsMock() {

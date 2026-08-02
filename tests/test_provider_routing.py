@@ -14,18 +14,22 @@ from at_flow.workspace import ATWorkspace
 
 
 class ProviderRoutingTests(unittest.TestCase):
-    def test_agent_provider_route_overrides_session_provider(self):
-        with tempfile.TemporaryDirectory() as directory:
-            workspace = ATWorkspace.init(Path(directory))
-            workspace.config["agent_providers"] = {
-                "main": "mock",
-                "analysis": "mock",
-                "code": "codex",
-                "test": "codex",
-            }
+    def test_explicit_session_provider_overrides_agent_route(self):
+        config = {"agent_providers": {"code": "codex"}}
 
-            self.assertEqual(resolve_agent_provider(workspace.config, "mock", "code"), "codex")
-            self.assertEqual(resolve_agent_provider(workspace.config, "mock", "test"), "codex")
+        self.assertEqual(resolve_agent_provider(config, "mock", "code"), "mock")
+        self.assertEqual(resolve_agent_provider(config, "opencode", "code"), "opencode")
+
+    def test_auto_provider_uses_agent_route(self):
+        config = {"agent_providers": {"code": "codex", "test": "codex"}}
+
+        self.assertEqual(resolve_agent_provider(config, "auto", "code"), "codex")
+        self.assertEqual(resolve_agent_provider(config, "auto", "test"), "codex")
+
+    def test_auto_provider_falls_back_to_default_provider(self):
+        config = {"agent_providers": {"code": "codex"}, "default_provider": "mock"}
+
+        self.assertEqual(resolve_agent_provider(config, "auto", "main"), "mock")
 
     def test_session_provider_is_fallback_when_no_agent_route_exists(self):
         self.assertEqual(resolve_agent_provider({}, "mock", "main"), "mock")
@@ -48,7 +52,7 @@ class ProviderRoutingTests(unittest.TestCase):
             session = SessionState.new(
                 task="route code",
                 project_path=workspace.projects_root / "default",
-                provider="missing-provider",
+                provider="auto",
                 pipeline=["code"],
                 session_id="route-code-session",
             )
