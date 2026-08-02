@@ -244,6 +244,27 @@ http://127.0.0.1:3000/runtime
 http://localhost:8000
 ```
 
+## 一键配置（V1.9）
+
+从零配置整个 AT Flow（环境体检、依赖安装、Codex 对话触发、Provider 命令与
+opencode 全局配置补全）以及双入口启动：
+
+```powershell
+python scripts/setup.py check     # 环境体检（只读）
+python scripts/setup.py install   # 依赖 + 初始化 + 触发块 + 配置补全
+python scripts/setup.py start     # 启动后端(:8000) 与前端(:3000) 并打开浏览器
+python scripts/setup.py doctor    # 健康自检与双入口就绪说明
+```
+
+或一步到位：
+
+```powershell
+setup.cmd all
+```
+
+脚本幂等，可重复执行，不覆盖已有的 `at.config.json`、`AGENTS.md`、
+opencode 全局配置与 `.at/` 数据。
+
 ## Cloud Deployment
 
 V1.7 deployment instructions are in `deploy/README.md`. The supported cloud

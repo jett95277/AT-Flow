@@ -206,6 +206,52 @@ Verification: backend 124 tests, frontend 38 tests, production build passed.
 Live opencode run verified against deepseek-v4-flash (opencode 1.18.11).
 ```
 
+## Current V1.9 Dual Entry And One Click Setup
+
+```text
+Status: complete
+Plan: docs/superpowers/plans/2026-08-03-at-v1-9-dual-entry-and-one-click-setup-implementation-plan.md
+Design: docs/superpowers/specs/2026-08-03-at-v1-9-dual-entry-and-one-click-setup-design.md
+Current node: none
+Last completed node: Task 8 - Full verification and wrap-up
+```
+
+V1.9 dual entry and one click setup summary:
+
+```text
+One-click helper:
+  scripts/setup.py (thin CLI) + src/at_flow/setup.py (core logic) + setup.cmd
+  check  -> read-only environment report
+  install-> python deps, npm ci, build, workspace init, Codex trigger,
+            at.config.json provider command fix, opencode global config merge
+  start  -> uvicorn(:8000) + vite dev(:3000), logs, health polling, browser
+  doctor -> at.py doctor + backend/frontend reachability + ready guide
+  all    -> check + install + doctor
+Idempotent: never overwrites existing at.config.json, AGENTS.md trigger block,
+opencode config keys, or .at runtime data.
+No silent fallback: missing tools/deps/config errors are reported explicitly.
+```
+
+Verification results:
+
+```text
+Backend tests: 146 passed (129 + 16 setup + 1 prompt contract)
+Frontend tests: 38 passed; production build passed
+CLI entry: mock pipeline main->analysis->code->test all OK
+Codex trigger: AGENTS.md installed with `python "<root>\at.py"` command (works
+  without pip-installing the package; verified `python -m at_flow` unusable on
+  this machine because setuptools 61.2 lacks PEP 660 and pip cannot copy the
+  .git checkpoints directory)
+Live codex: code/test steps ran against deepseek-v4-flash; test initially
+  failed the artifact language contract because the model prefixed the artifact
+  with Chinese narrative; fixed by adding Artifact output rules to build_prompt
+  (artifact must be entirely English, no preamble); retry passed
+Language contract: source=zh -> runtime=en -> display=zh, artifact.zh.md
+  generated, input_translation completed by codex
+Web entry: /api/health OK, providers auto/codex/mock/opencode listed, session
+  create + run-one-step worked, vite dev server reachable
+```
+
 Execution rules:
 
 ```text

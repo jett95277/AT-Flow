@@ -25,3 +25,4 @@ web/dist/
 output/
 .npm-cache/
 .localappdata/
+.claude/

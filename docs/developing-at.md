@@ -252,3 +252,18 @@ agent 只能在当前阶段产出内容，不能推进状态机、不能跳阶�
 7. 最后再增强 ASCII/TUI 展示
 
 一句话原则：AT 要先成为可靠的 agent runtime，再成为好看的 agent 控制台。
+
+## 一键配置脚本
+
+V1.9 提供 `scripts/setup.py`（核心逻辑在 `src/at_flow/setup.py`）：
+
+```powershell
+python scripts/setup.py check     # 环境体检（只读）
+python scripts/setup.py install   # 依赖 + 初始化 + 触发块 + 配置补全
+python scripts/setup.py start     # 启动后端(:8000) 与前端(:3000)
+python scripts/setup.py doctor    # 健康自检与就绪说明
+```
+
+脚本幂等；opencode 全局配置只补缺失键，at.config.json 只修复
+codex/opencode 非交互命令，AGENTS.md 触发块通过既有
+`install_codex_trigger` 追加/替换。
