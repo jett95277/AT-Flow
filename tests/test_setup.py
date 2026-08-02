@@ -18,10 +18,16 @@ from at_flow.setup import (
     opencode_config_path,
     provider_commands_fixed,
     resolve_npm,
+    _check_command,
 )
 
 
 class SetupCheckTests(unittest.TestCase):
+    def test_check_command_missing_includes_hint(self):
+        result = _check_command("codex", None, "install codex or use mock")
+        self.assertEqual(result.status, "MISSING")
+        self.assertIn("install codex or use mock", result.detail)
+
     def test_opencode_config_path_uses_home_config_dir(self):
         self.assertEqual(
             opencode_config_path(Path("C:/Users/test")),

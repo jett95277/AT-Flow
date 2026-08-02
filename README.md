@@ -244,6 +244,56 @@ http://127.0.0.1:3000/runtime
 http://localhost:8000
 ```
 
+## 前置准备
+
+AT Flow 运行时需要 Python >= 3.9 与 Node.js >= 18；code-agent provider
+（codex / opencode）需要单独安装并配置模型 API。
+
+### 1. Python 与 Node
+
+```powershell
+python --version   # >= 3.9
+node --version     # >= 18
+```
+
+### 2. codex（默认 code/test provider）
+
+安装 Codex CLI（官方安装方式），然后配置 DeepSeek 模型。编辑
+`~/.codex/config.toml`：
+
+```toml
+model = "deepseek-v4-flash"
+model_provider = "deepseek"
+preferred_auth_method = "apikey"
+forced_login_method = "api"
+
+[model_providers.deepseek]
+name = "deepseek"
+base_url = "https://api.deepseek.com/"
+wire_api = "responses"
+experimental_bearer_token = "<YOUR_DEEPSEEK_API_KEY>"
+```
+
+将 `<YOUR_DEEPSEEK_API_KEY>` 替换为你的 DeepSeek API key。
+
+### 3. opencode（可选替代 provider）
+
+```powershell
+npm install -g opencode-ai
+opencode login
+```
+
+`setup.cmd install` 会自动写入 opencode 全局配置（deepseek 模型 +
+本项目 `.at/shared` / `.at/sessions` 的外部目录权限）；API key 请通过
+`opencode login` 或 `DEEPSEEK_API_KEY` 环境变量提供。
+
+### 4. 未配置 API key 时的降级路径
+
+AT 本体与 `mock` provider 不依赖任何 API。只想先跑通流程时，把
+`at.config.json` 中的 `agent_providers` 全部改为 `mock`，或创建会话时
+选择 `mock`。`setup.cmd check` 会明确提示 codex/opencode 缺失，不会静默
+替换为 mock。
+
 ## 一键配置（V1.9）
 
 从零配置整个 AT Flow（环境体检、依赖安装、Codex 对话触发、Provider 命令与

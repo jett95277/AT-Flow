@@ -51,8 +51,17 @@ def environment_report(root: Path) -> list[CheckResult]:
         _check_python_packages(),
         _check_command("node", shutil.which("node")),
         _check_command("npm", shutil.which(resolve_npm())),
-        _check_command("codex", shutil.which("codex")),
-        _check_command("opencode", shutil.which("opencode")),
+        _check_command(
+            "codex",
+            shutil.which("codex"),
+            "install codex and configure a model provider (see README '前置准备'); "
+            "or set agent_providers code/test to mock in at.config.json",
+        ),
+        _check_command(
+            "opencode",
+            shutil.which("opencode"),
+            "install opencode (`npm i -g opencode-ai`) and configure auth, or use codex/mock",
+        ),
         _check_at_workspace(root),
         _check_agents_trigger(root),
         _check_provider_commands(root),
@@ -68,10 +77,13 @@ def _check_python_packages() -> CheckResult:
     return CheckResult("python_deps", "OK", "fastapi/uvicorn/httpx importable")
 
 
-def _check_command(name: str, resolved: str | None) -> CheckResult:
+def _check_command(name: str, resolved: str | None, hint: str | None = None) -> CheckResult:
     if resolved:
         return CheckResult(name, "OK", f"command found: {resolved}")
-    return CheckResult(name, "MISSING", f"{name} not found in PATH")
+    detail = f"{name} not found in PATH"
+    if hint:
+        detail += f"; {hint}"
+    return CheckResult(name, "MISSING", detail)
 
 
 def _check_at_workspace(root: Path) -> CheckResult:
