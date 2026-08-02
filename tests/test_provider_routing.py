@@ -62,6 +62,50 @@ class ProviderRoutingTests(unittest.TestCase):
 
             self.assertEqual(result.steps[0].status, "done")
 
+    def test_process_provider_stderr_never_contaminates_artifact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = ATWorkspace.init(Path(directory))
+            script = (
+                "import sys; "
+                "sys.stderr.write('PROVIDER_DIAGNOSTIC\\n'); "
+                "print('## Task Summary\\ndemo\\n## Goal\\ng\\n## Non-Goals\\nn\\n## Constraints\\nc\\n## Acceptance Criteria\\na\\n## Risks And Questions\\nr\\n## Handoff To Analysis\\nh')"
+            )
+            workspace.config["providers"]["echo"] = {
+                "type": "process",
+                "command": [sys.executable, "-c", script],
+                "prompt_mode": "stdin",
+                "encoding": "utf-8",
+                "cwd": "workspace",
+                "env_policy": "minimal",
+                "env_passthrough": ["PATH", "PATHEXT", "SystemRoot", "ComSpec", "TEMP", "TMP", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "LANG"],
+                "timeout_seconds": 60,
+            }
+            workspace.config["agent_providers"] = {"main": "echo"}
+            session = SessionState.new(
+                task="stderr isolation",
+                project_path=workspace.projects_root / "default",
+                provider="auto",
+                pipeline=["main"],
+                session_id="stderr-isolation-session",
+            )
+            workspace.create_session(session)
+
+            result = Runner(workspace).run("stderr-isolation-session", one_step=True)
+
+            self.assertEqual(result.steps[0].status, "done")
+            artifact_path = (
+                workspace.session_agent_outbox_dir("stderr-isolation-session", "main")
+                / "artifact.md"
+            )
+            artifact = artifact_path.read_text(encoding="utf-8")
+            self.assertNotIn("PROVIDER_DIAGNOSTIC", artifact)
+            stderr_log = (
+                workspace.session_agent_dir("stderr-isolation-session", "main")
+                / "provider.stderr.log"
+            )
+            self.assertTrue(stderr_log.is_file())
+            self.assertIn("PROVIDER_DIAGNOSTIC", stderr_log.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

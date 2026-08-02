@@ -85,3 +85,18 @@ Run:
 - Frontend production build.
 
 Record any environment, dependency, or sandbox limitation explicitly.
+
+## Execution Status
+
+```text
+Status: complete
+Backend tests: 129 passed
+Frontend tests: 38 passed
+Production build: passed
+Provider capability: codex available, opencode available (opencode 1.18.11, deepseek-v4-flash verified live)
+Session snapshot display: sessions/*.md translated on demand with .zh.md cache (cherry-picked 9496d55)
+Provider runtime: codex exec and opencode run are non-interactive (at.config.json); stderr isolated to provider.stderr.log (129th test)
+Live E2E: opencode main-agent run completed; external_directory allow rules verified for .at/shared and .at/sessions
+Branch: codex/v1.9-codeagent-switch (f52ae19 + 9496d55)
+Git operations: V1.8 pushed as b839d91 after force-update; v1.9 branch pushed
+```

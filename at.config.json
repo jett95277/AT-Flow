@@ -47,7 +47,15 @@
     "codex": {
       "type": "process",
       "command": [
-        "codex"
+        "codex",
+        "exec",
+        "--skip-git-repo-check",
+        "--sandbox",
+        "workspace-write",
+        "--ephemeral",
+        "--color",
+        "never",
+        "-"
       ],
       "prompt_mode": "stdin",
       "encoding": "utf-8",
@@ -71,7 +79,8 @@
     "opencode": {
       "type": "process",
       "command": [
-        "opencode"
+        "opencode",
+        "run"
       ],
       "prompt_mode": "stdin",
       "encoding": "utf-8",

@@ -96,6 +96,7 @@ class ProcessProvider(Provider):
                 "AT_SHARED_INBOX": "",
             },
             prompt_path=context.agent_dir / "prompt.md",
+            stderr_path=context.agent_dir / "provider.stderr.log",
         )
         return AgentResult(content=output or "(provider returned no output)")
 
