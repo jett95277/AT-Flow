@@ -128,7 +128,11 @@ def cmd_init(args: argparse.Namespace) -> int:
 def cmd_enable(args: argparse.Namespace) -> int:
     target = Path(args.target)
     workspace = ATWorkspace.init(target)
-    agents_path = install_codex_trigger(workspace.root, at_command=args.at_command)
+    agents_path = install_codex_trigger(
+        workspace.root,
+        at_entrypoint=workspace.root / "at.py",
+        at_command=args.at_command,
+    )
     print(f"enabled: {workspace.root}")
     print(f"config: {workspace.root / 'at.config.json'}")
     print(f"trigger: {agents_path}")

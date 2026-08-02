@@ -68,7 +68,7 @@ class CodexTriggerTests(unittest.TestCase):
             self.assertTrue((target / ".at" / "agents" / "main" / "agent.md").exists())
             self.assertFalse((target / ".at" / "shared" / "agents").exists())
             content = (target / "AGENTS.md").read_text(encoding="utf-8")
-            self.assertIn("python -m at_flow --root", content)
+            self.assertIn(f'python "{target / "at.py"}" --root', content)
 
 
 if __name__ == "__main__":
