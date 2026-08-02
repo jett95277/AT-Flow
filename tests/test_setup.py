@@ -50,6 +50,54 @@ class SetupCheckTests(unittest.TestCase):
             trigger_check = next(item for item in report if item.name == "codex_trigger")
             self.assertEqual(trigger_check.status, "MISSING")
 
+    def test_environment_report_reports_corrupt_config_as_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "at.config.json").write_text("{not json", encoding="utf-8")
+            report = environment_report(root)
+            check = next(item for item in report if item.name == "provider_commands")
+            self.assertEqual(check.status, "ERROR")
+
+    def test_opencode_check_handles_non_object_permission(self):
+        import json as json_module
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = Path(directory) / "opencode.jsonc"
+            config.write_text(json_module.dumps({"permission": "ask"}), encoding="utf-8")
+            original = at_setup.opencode_config_path
+            at_setup.opencode_config_path = lambda home=None: config
+            try:
+                report = environment_report(root)
+            finally:
+                at_setup.opencode_config_path = original
+            check = next(item for item in report if item.name == "opencode_global_config")
+            self.assertEqual(check.status, "ERROR")
+
+    def test_opencode_check_flags_missing_sessions_rule(self):
+        import json as json_module
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = Path(directory) / "opencode.jsonc"
+            config.write_text(
+                json_module.dumps(
+                    {
+                        "provider": {"deepseek": {"models": {"deepseek-v4-flash": {}}}},
+                        "permission": {"external_directory": {f"{root.as_posix()}/.at/shared/**": "allow"}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original = at_setup.opencode_config_path
+            at_setup.opencode_config_path = lambda home=None: config
+            try:
+                report = environment_report(root)
+            finally:
+                at_setup.opencode_config_path = original
+            check = next(item for item in report if item.name == "opencode_global_config")
+            self.assertEqual(check.status, "FIXABLE")
+
 
 class SetupInstallLogicTests(unittest.TestCase):
     def test_provider_commands_fixed_adds_codex_exec_and_opencode_run(self):

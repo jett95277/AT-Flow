@@ -95,8 +95,13 @@ def _check_provider_commands(root: Path) -> CheckResult:
     config_path = root / "at.config.json"
     if not config_path.exists():
         return CheckResult("provider_commands", "MISSING", "at.config.json missing")
-    config = json.loads(config_path.read_text(encoding="utf-8"))
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return CheckResult("provider_commands", "ERROR", f"at.config.json not readable/parseable: {exc}")
     providers = config.get("providers", {})
+    if not isinstance(providers, dict):
+        return CheckResult("provider_commands", "ERROR", "at.config.json providers is not an object")
     codex = list(providers.get("codex", {}).get("command") or [])
     opencode = list(providers.get("opencode", {}).get("command") or [])
     problems = []
@@ -121,11 +126,24 @@ def _check_opencode_global_config(root: Path) -> CheckResult:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
         return CheckResult("opencode_global_config", "ERROR", f"{path} not parseable: {exc}")
-    rules = data.get("permission", {}).get("external_directory", {})
-    expected = f"{root.as_posix()}/.at/shared/**"
+    permission = data.get("permission", {})
+    if not isinstance(permission, dict):
+        return CheckResult("opencode_global_config", "ERROR", "permission is not an object")
+    rules = permission.get("external_directory", {})
+    if not isinstance(rules, dict):
+        return CheckResult("opencode_global_config", "ERROR", "permission.external_directory is not an object")
     normalized = {str(key).replace("\\", "/"): value for key, value in rules.items()}
-    if expected not in normalized:
-        return CheckResult("opencode_global_config", "FIXABLE", "missing .at/shared external_directory rule")
+    expected_rules = [f"{root.as_posix()}/.at/shared/**", f"{root.as_posix()}/.at/sessions/**"]
+    missing_rules = [rule for rule in expected_rules if rule not in normalized]
+    provider = data.get("provider", {})
+    models = provider.get("deepseek", {}).get("models", {}) if isinstance(provider, dict) else {}
+    if missing_rules or "deepseek-v4-flash" not in models:
+        problems = []
+        if missing_rules:
+            problems.append("missing external_directory rule(s): " + ", ".join(missing_rules))
+        if "deepseek-v4-flash" not in models:
+            problems.append("missing deepseek/deepseek-v4-flash model config")
+        return CheckResult("opencode_global_config", "FIXABLE", "; ".join(problems))
     return CheckResult("opencode_global_config", "OK", "deepseek config and external_directory rules present")
 
 
@@ -201,7 +219,7 @@ def ensure_codex_trigger(root: Path) -> Path:
 
 
 def ensure_at_package(root: Path) -> None:
-    if importlib.util.find_spec("at_flow") is not None:
+    if _at_package_importable():
         return
     try:
         subprocess.run(
@@ -217,6 +235,22 @@ def ensure_at_package(root: Path) -> None:
             f"the AGENTS.md trigger uses `python \"{root / 'at.py'}\"` so the package install is optional",
             file=sys.stderr,
         )
+
+
+def _at_package_importable() -> bool:
+    import tempfile
+
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    probe = subprocess.run(
+        [sys.executable, "-c", "import at_flow"],
+        cwd=tempfile.gettempdir(),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return probe.returncode == 0
 
 
 def ensure_provider_config(root: Path) -> list[str]:

@@ -68,7 +68,8 @@ class CodexTriggerTests(unittest.TestCase):
             self.assertTrue((target / ".at" / "agents" / "main" / "agent.md").exists())
             self.assertFalse((target / ".at" / "shared" / "agents").exists())
             content = (target / "AGENTS.md").read_text(encoding="utf-8")
-            self.assertIn(f'python "{target / "at.py"}" --root', content)
+            repo_at = Path(__file__).resolve().parents[1] / "at.py"
+            self.assertIn(f'python "{repo_at}" --root', content)
 
 
 if __name__ == "__main__":
