@@ -22,13 +22,13 @@ export class AtApiError extends Error {
   status: number;
   details?: Record<string, unknown>;
 
-  constructor(status: number, body: ApiErrorBody["error"]) {
-    super(body.message);
+  constructor(status: number, body?: ApiErrorBody["error"]) {
+    super(body?.message ?? `Request failed with status ${status}`);
     this.name = "AtApiError";
-    this.code = body.code;
-    this.retryable = body.retryable;
+    this.code = body?.code ?? "api_error";
+    this.retryable = body?.retryable ?? false;
     this.status = status;
-    this.details = body.details;
+    this.details = body?.details;
   }
 }
 
@@ -143,9 +143,14 @@ export class AtApiClient {
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
-  const body = await response.json();
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    // Non-JSON body (e.g. nginx error page or gateway timeout).
+  }
   if (!response.ok) {
-    const errorBody = body as ApiErrorBody;
+    const errorBody = (body ?? {}) as ApiErrorBody;
     throw new AtApiError(response.status, errorBody.error);
   }
   return body as T;

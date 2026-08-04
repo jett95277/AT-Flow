@@ -146,6 +146,56 @@ describe("AtApiClient", () => {
     });
   });
 
+  it("throws readable error when error body has no error field", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ detail: "Internal Server Error" })
+    });
+    const client = new AtApiClient("http://localhost:8000", fetchMock);
+
+    await expect(client.getHealth()).rejects.toMatchObject({
+      name: "AtApiError",
+      status: 500
+    });
+    await expect(client.getHealth()).rejects.not.toMatchObject({
+      message: expect.stringContaining("Cannot read properties")
+    });
+  });
+
+  it("throws readable error when response body is not JSON", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 504,
+      json: async () => {
+        throw new SyntaxError("Unexpected token '<'");
+      }
+    });
+    const client = new AtApiClient("http://localhost:8000", fetchMock);
+
+    await expect(client.getHealth()).rejects.toMatchObject({
+      name: "AtApiError",
+      status: 504
+    });
+    await expect(client.getHealth()).rejects.not.toMatchObject({
+      message: expect.stringContaining("Cannot read properties")
+    });
+  });
+
+  it("throws readable error when error body is empty object", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({})
+    });
+    const client = new AtApiClient("http://localhost:8000", fetchMock);
+
+    await expect(client.getHealth()).rejects.toMatchObject({
+      name: "AtApiError",
+      status: 500
+    });
+  });
+
   it("binds the default fetcher to globalThis", async () => {
     const originalFetch = globalThis.fetch;
     const fetchMock = vi.fn(function (this: typeof globalThis) {
