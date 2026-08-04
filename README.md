@@ -317,9 +317,9 @@ opencode 全局配置与 `.at/` 数据。
 
 ## Cloud Deployment
 
-V1.7 deployment instructions are in `deploy/README.md`. The supported cloud
-demo path is the Web Console with the `mock` provider behind Nginx, HTTPS,
-systemd, and SQLite persistence.
+v1.7.1 deployment instructions are in `deploy/README.md`. The cloud path runs
+the full V1.9 capability (codex/opencode providers, language contract) inside
+Docker containers behind Nginx, HTTPS, and Basic Auth.
 
 ## Web Console 界面
 

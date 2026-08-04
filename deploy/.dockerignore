@@ -1,0 +1,9 @@
+.git/
+.at/
+.venv/
+node_modules/
+web/node_modules/
+web/dist/
+output/
+.claude/
+*.log

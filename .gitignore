@@ -26,3 +26,4 @@ output/
 .npm-cache/
 .localappdata/
 .claude/
+*.pem

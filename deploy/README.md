@@ -1,212 +1,138 @@
-# AT Flow Cloud Deployment
+# AT Flow v1.7.1 Cloud Docker Deployment
 
-## Target Server
+把 V1.9 的真实能力（codex/opencode provider、语言契约、双入口）部署到
+Ubuntu 服务器，通过 HTTPS + Basic Auth 提供受控 Web Console 访问。
 
-Ubuntu 24.04 LTS.
-
-Recommended minimum:
+## 架构
 
 ```text
-2 CPU cores
-4 GB memory
-60 GB SSD
-Public ports: 22, 80, 443
+浏览器 -> HTTPS(nginx 容器, Basic Auth) -> /api/ -> backend 容器(:8000)
+                                                      -> codex/opencode
+                                                      -> api.deepseek.com
 ```
 
-## Install Packages
+## 前置条件
 
-```bash
-sudo apt update
-sudo apt install -y git python3 python3-venv python3-pip nodejs npm nginx certbot python3-certbot-nginx sqlite3 ufw
+- Ubuntu 服务器（20.04+，推荐 Ubuntu 24.04 LTS），root 或 sudo 权限
+- 本地 Windows 机器可 SSH 到服务器
+- DeepSeek API key
+- 域名（可选；无域名时降级为 IP + HTTP，见下文）
+
+## 首次部署
+
+### 方式一：本地一键发布（推荐）
+
+```powershell
+cd E:\AT FLOW
+.\deploy\publish.ps1 -HostName <server-ip> -SshUser root
 ```
 
-## Clone Repository
+脚本会：
+
+1. 用系统 tar 打包项目（排除 `.git`/`.at`/`node_modules`/`.venv` 等）并 SSH 同步
+2. 在服务器执行 `deploy/install.sh`
+
+`install.sh` 幂等，会：
+
+1. 安装 docker、docker compose plugin、nginx、certbot（镜像内用 `npm ci` 构建前端）
+2. 创建 `/etc/at-flow/at-flow.env`（不存在才生成，含随机 Basic Auth 密码）
+3. 生成 `/etc/at-flow/.htpasswd`
+4. `docker compose up -d --build`
+5. 配置 ufw（22/80/443）
+
+### 方式二：服务器手动执行
 
 ```bash
-sudo mkdir -p /opt/at-flow
-sudo chown "$USER":"$USER" /opt/at-flow
-git clone https://github.com/jett95277/AT-Flow.git /opt/at-flow
 cd /opt/at-flow
-git checkout V1.7
+bash deploy/install.sh
 ```
 
-## Python Backend Setup
+## 环境变量（/etc/at-flow/at-flow.env）
 
-```bash
-cd /opt/at-flow
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-PYTHONPATH=src python -m at_flow.web --root /opt/at-flow --host 127.0.0.1 --port 8000
-```
-
-Stop the foreground process after confirming startup. The production backend will run through systemd.
-
-## Frontend Build
-
-```bash
-cd /opt/at-flow/web
-npm ci
-VITE_AT_API_BASE_URL=/api npm run build
-```
-
-The production frontend uses same-origin `/api`, so the public browser does not call `localhost:8000`.
-
-## Environment File
-
-```bash
-sudo mkdir -p /etc/at-flow
-sudo cp /opt/at-flow/deploy/env/at-flow.env.example /etc/at-flow/at-flow.env
-sudo nano /etc/at-flow/at-flow.env
-```
-
-Example:
-
-```env
-AT_ALLOWED_ORIGINS=https://example.com
+```text
+AT_ALLOWED_ORIGINS=https://<domain>
 PYTHONPATH=/opt/at-flow/src
+DEEPSEEK_API_KEY=<server-only secret>
+AT_CODEX_SANDBOX=workspace-write
+AT_AUTH_USER=<basic-auth user>
+AT_AUTH_PASS=<basic-auth password>
 ```
 
-Do not put secrets in Git.
+- `DEEPSEEK_API_KEY` 只存在于服务器文件，不入 git、不进镜像层
+- 修改 env 后重启：`docker compose -f deploy/docker-compose.yml restart backend`
+- Basic Auth 密码由 install.sh 首次随机生成；改密码需同时更新 env 与 htpasswd
+- nginx 容器使用 `auth_basic` 校验 `/etc/nginx/.htpasswd`，未认证请求返回 401
 
-## systemd Service
+## HTTPS（certbot）
+
+域名解析指向服务器后：
 
 ```bash
-sudo useradd --system --home /opt/at-flow --shell /usr/sbin/nologin atflow || true
-sudo chown -R atflow:atflow /opt/at-flow
-sudo cp /opt/at-flow/deploy/systemd/at-flow-backend.service.example /etc/systemd/system/at-flow-backend.service
-sudo systemctl daemon-reload
-sudo systemctl enable at-flow-backend
-sudo systemctl restart at-flow-backend
-sudo systemctl status at-flow-backend --no-pager
+apt-get install -y certbot python3-certbot-nginx
+certbot --nginx -d <domain>
+systemctl enable --now certbot.timer
 ```
 
-Backend logs:
+证书路径 `/etc/letsencrypt` 已挂载进 nginx 容器（当前 nginx 模板监听 80；
+如需 443 反代，在 `deploy/docker/nginx.conf.template` 补充 443 server 块并重启）。
 
-```bash
-journalctl -u at-flow-backend -n 100 --no-pager
-```
+### 无域名降级（显式说明）
 
-## Nginx Reverse Proxy
+没有域名时只能 IP + HTTP：`AT_ALLOWED_ORIGINS=http://<server-ip>`，
+Basic Auth 仍然生效。**风险：明文传输，凭据与 API 流量可被窃听**；
+仅建议内网/短期使用，公网使用必须先配置 HTTPS。
 
-```bash
-sudo cp /opt/at-flow/deploy/nginx/at-flow.conf.example /etc/nginx/sites-available/at-flow
-sudo nano /etc/nginx/sites-available/at-flow
-sudo ln -sf /etc/nginx/sites-available/at-flow /etc/nginx/sites-enabled/at-flow
-sudo nginx -t
-sudo systemctl reload nginx
-```
+## codex 沙箱（显式降级）
 
-Replace `example.com` with your real domain before reloading Nginx.
-
-## HTTPS
-
-Point your DNS A record to the server public IP first.
-
-```bash
-sudo certbot --nginx -d example.com
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-## Firewall
-
-```bash
-sudo ufw allow 22
-sudo ufw allow 80
-sudo ufw allow 443
-sudo ufw enable
-sudo ufw status
-```
-
-Port `8000` must not be opened publicly.
-
-## Persistent Data
-
-These paths must survive backend restarts and redeploys:
+容器内 codex 默认 `AT_CODEX_SANDBOX=workspace-write`。若容器内沙箱不可用
+（bubblewrap/setuid 受限），backend 日志会出现明确错误；此时可显式设置：
 
 ```text
-.at/sessions
-.at/shared
-.at/projects
-.at/web/console.sqlite3
+AT_CODEX_SANDBOX=read-only
 ```
 
-For V1.7, these paths can remain under `/opt/at-flow`. A future production split can move runtime data to `/var/lib/at-flow`.
+然后 `docker compose restart backend`。这是有意的能力降级，不会静默发生。
 
-## Smoke Tests
+## 验证
 
 ```bash
-curl https://example.com/api/health
-curl https://example.com/api/sessions
+curl -u <user>:<password> https://<domain>/api/health
 ```
 
-Browser checks:
+浏览器打开 `https://<domain>/`，Basic Auth 弹窗输入账号密码，
+创建 mock 会话推进；再创建一个真实任务（codex provider）验证 code/test 步骤。
 
-```text
-https://example.com/
-https://example.com/api/health
+## 升级
+
+```powershell
+.\deploy\publish.ps1 -HostName <server-ip> -SshUser root
 ```
 
-In the Web Console:
+重复执行幂等；代码变更后重新构建镜像。
 
-```text
-create a mock session
-run one step
-continue the session
-inspect state machine
-inspect trace
-inspect audit
-inspect artifact
-open files from the workspace tree
-```
-
-## Troubleshooting
-
-Backend:
-
-```bash
-sudo systemctl status at-flow-backend --no-pager
-journalctl -u at-flow-backend -n 100 --no-pager
-```
-
-Nginx:
-
-```bash
-sudo nginx -t
-sudo tail -n 100 /var/log/nginx/error.log
-sudo tail -n 100 /var/log/nginx/access.log
-```
-
-Local backend health from the server:
-
-```bash
-curl http://127.0.0.1:8000/api/health
-```
-
-Common causes:
-
-```text
-backend service not running
-wrong AT_ALLOWED_ORIGINS
-web/dist missing
-Nginx server_name not changed from example.com
-DNS does not point to the server
-certificate not issued
-.at directory not writable by atflow
-```
-
-## Rollback
+## 回滚
 
 ```bash
 cd /opt/at-flow
-git log --oneline -5
+docker compose -f deploy/docker-compose.yml down
 git checkout <previous-good-commit>
-source .venv/bin/activate
-pip install -r requirements.txt
-cd web
-VITE_AT_API_BASE_URL=/api npm run build
-sudo systemctl restart at-flow-backend
-sudo nginx -t
-sudo systemctl reload nginx
+docker compose -f deploy/docker-compose.yml up -d --build
 ```
+
+## 日志排查
+
+```bash
+docker compose -f /opt/at-flow/deploy/docker-compose.yml logs -f backend
+docker compose -f /opt/at-flow/deploy/docker-compose.yml logs -f nginx
+```
+
+数据卷：`.at` 数据（sessions/shared/projects/SQLite）在 `at_data` 卷，
+codex/opencode 配置在 `at_codex`/`at_opencode` 卷；重启不丢。
+持久化路径：`.at/sessions`、`.at/shared`、`.at/projects`、`.at/web/console.sqlite3`。
+
+## 安全要点
+
+- 8000 端口不对外（compose 仅 expose，nginx 反代）
+- `ufw allow 80/tcp`、`ufw allow 443/tcp`、`ufw allow 22/tcp`，其余默认拒绝
+- Basic Auth 保护全部页面与 API
+- 密钥只存 `/etc/at-flow/at-flow.env`（600 权限）
