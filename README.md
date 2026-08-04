@@ -172,6 +172,13 @@ at enable --target "<project-root>"
 ## Deployment / Local Development
 
 AT Flow 当前 main 分支以本地 CLI/runtime 使用为主。
+### 云端演示环境（v1.7 云部署）
+
+公网访问地址：`http://175.178.228.21`
+
+- Web Console 通过浏览器访问，Basic Auth 保护（凭据配置在服务器 `/etc/at-flow/at-flow.env`）
+- 部署方式：Docker Compose（backend + nginx 容器），详见 `deploy/README.md`
+- 说明：裸 IP 无法签发 HTTPS 证书，当前为 HTTP + Basic Auth；公网长期使用建议绑定域名后启用 HTTPS
 
 安装为可编辑包：
 
