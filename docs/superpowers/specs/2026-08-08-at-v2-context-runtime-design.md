@@ -47,6 +47,40 @@ OpenWiki       → 项目已经知道什么（knowledge）
 Codex、Superpowers、OpenWiki、Claude Squad 都是可替换 Adapter；稳定的是协议
 对象：**Task、Context、Memory、Scope、Handoff、Artifact、Session**。
 
+## Adapter 选型调研（2026-08-08 补充）
+
+### Knowledge 层：首选 CodeAlmanac，备选 openwiki
+
+调研结论（V0.3 前需要落地验证）：
+
+- **CodeAlmanac**（langchain-ai/codealmanac）：搜索 / 展示 / 摄入三能力与
+  Knowledge Bridge 的 `query/get/propose` 一一对应，接口匹配度最高。
+- **硬伤：macOS-only**（依赖 `mdfind` Spotlight）。当前开发机与云服务器均为
+  Linux/Windows，V0.3 集成前必须先验证平台支持；若无法跨平台，则降级为备选。
+- **备选：langchain-ai/openwiki**：纯文件系统 + 向量索引，跨平台，但摄入与检索
+  语义是“文档库”而非“已验证知识”，需要额外的 status/promotion 映射。
+- V0.1 不依赖任何外部 Knowledge 实现，`local` provider 就是 `.agent/knowledge/refs/`
+  引用层，接口已按 `query/get/propose` 对齐，后续替换 Adapter 不破坏协议。
+
+### Execution 层：不依赖 TUI 型三方工具，V0.4 自建 tmux+worktree
+
+调研结论（V0.4 规划，V0.1 只做 LocalAdapter）：
+
+- **dmux / Claude Squad 均为交互式 TUI，无脚本化 API**：无法在非交互进程里稳定
+  spawn/collect，直接依赖会让 `at` CLI 变成“套壳终端”，违背可用性第一原则。
+- 倾向 V0.4 直接 spawn `tmux + git worktree`（借鉴两者的工作流模式：每 agent 独立
+  worktree + 独立会话），由 AT Runtime 自己管理生命周期与输出收集，不引入外部 UI。
+- V0.1 的进程级隔离（每 session 一个新 Codex 进程）已经验证同一前提：session 之间
+  无会话连续性，隔离是真实的。
+
+### Superpowers：已装，V0.2 接入无风险
+
+- 本机已安装 `openai-curated-remote/superpowers@6.2.0`，`executing-plans` /
+  `subagent-driven-development` 等技能可直接被 Agent 调用。
+- V0.1 的 CLI 设计（`at` 命令族）天然适配 Superpowers 的 workflow 层：AT 负责
+  context/memory/scope，Superpowers 负责“怎么做”，两层通过 Context Bundle 交互，
+  不需要额外适配代码。
+
 ## 六条核心原则
 
 1. **Conversation is not Memory**：聊天历史不能直接成为长期记忆。

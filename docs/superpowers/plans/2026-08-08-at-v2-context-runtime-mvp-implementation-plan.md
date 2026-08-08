@@ -31,7 +31,7 @@
 **Interfaces:**
 - Produces: 可 import 的 `at_runtime` 包与空 CLI 入口。
 
-- [ ] **Step 1: 删除 v1 实现并创建新包骨架**
+- [x] **Step 1: 删除 v1 实现并创建新包骨架**
 
 删除 v1 文件（git 历史保留），创建：
 
@@ -65,12 +65,12 @@ if __name__ == "__main__":
 `requirements.txt`：`PyYAML>=6.0`
 `pyproject.toml`：name=at-runtime、scripts `at = "at_runtime.cli:main"`
 
-- [ ] **Step 2: 运行确认**
+- [x] **Step 2: 运行确认**
 
 Run: `python -c "import at_runtime; print(at_runtime.__version__)"`
 Expected: `0.1.0`
 
-- [ ] **Step 3: 记录变更**
+- [x] **Step 3: 记录变更**
 
 ---
 
@@ -88,7 +88,7 @@ Expected: `0.1.0`
     `manifest.yaml`、`policies.yaml` 默认模板。
   - `load_manifest(root: Path) -> dict` / `load_policies(root: Path) -> dict`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 from pathlib import Path
@@ -146,12 +146,12 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m unittest tests.test_workspace -v`
 Expected: FAIL —— `ModuleNotFoundError: at_runtime.workspace`
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 from __future__ import annotations
@@ -233,12 +233,12 @@ def load_policies(root: Path) -> dict[str, Any]:
 
 接入 CLI `init` 命令（`initialize_workspace(Path.cwd())`）。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m unittest tests.test_workspace -v`
 Expected: PASS（3 个用例）
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -257,7 +257,7 @@ Expected: PASS（3 个用例）
   - `update_session_status(root, session_id, status) -> dict`
   - `list_sessions(root) -> list[dict]`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 from at_runtime.registry import (
@@ -284,9 +284,9 @@ class RegistryTests(unittest.TestCase):
             self.assertEqual(updated["status"], "running")
 ```
 
-- [ ] **Step 2: 运行确认失败**（模块不存在）
+- [x] **Step 2: 运行确认失败**（模块不存在）
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 def _write_yaml(path: Path, data: dict) -> None:
@@ -348,9 +348,9 @@ def list_sessions(root: Path) -> list[dict]:
     ]
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -368,7 +368,7 @@ def list_sessions(root: Path) -> list[dict]:
   - `read_memory(root, uri) -> list[dict]`
   - `list_memory(root, scope: str, tier: str) -> list[dict]`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 from at_runtime.memory import memory_path, write_memory, read_memory
@@ -398,9 +398,9 @@ class MemoryTests(unittest.TestCase):
             self.assertEqual(len(read_memory(root, "memory://project/ASR/long")), 1)
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 TIER_DIRS = {"short": "memory/short", "medium": "memory/medium", "long": "memory/long"}
@@ -469,9 +469,9 @@ def _save_entries(path: Path, entries: list[dict]) -> None:
     path.write_text("\n---\n".join(blocks) + "\n", encoding="utf-8")
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -484,7 +484,7 @@ def _save_entries(path: Path, entries: list[dict]) -> None:
 **Interfaces:**
 - Produces: `can_read(policies, role, resource) -> bool`、`can_write(policies, role, resource) -> bool`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 from at_runtime.policy import can_read, can_write
@@ -509,9 +509,9 @@ class PolicyTests(unittest.TestCase):
             self.assertTrue(can_write(policies, "code", "source"))
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 def can_read(policies: dict, role: str, resource: str) -> bool:
@@ -522,9 +522,9 @@ def can_write(policies: dict, role: str, resource: str) -> bool:
     return resource in policies.get("roles", {}).get(role, {}).get("write", [])
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -541,7 +541,7 @@ def can_write(policies: dict, role: str, resource: str) -> bool:
   - `estimate_tokens(text: str) -> int`（按字符数/4 估算）
   - `assemble_bundle(bundle: dict, budget: int) -> dict`（超预算截断：先删 wiki，再压 memory，最后减 source；task/constraints/handoff 永不删）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 from at_runtime.context import build_context, estimate_tokens
@@ -575,9 +575,9 @@ class ContextTests(unittest.TestCase):
         self.assertGreater(estimate_tokens("hello world" * 100), 10)
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 def estimate_tokens(text: str) -> int:
@@ -606,9 +606,9 @@ def build_context(root: Path, session_id: str, explicit_refs: dict) -> dict:
 
 CLI `at context inspect <session-id>` 打印 bundle JSON。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -622,7 +622,7 @@ CLI `at context inspect <session-id>` 打印 bundle JSON。
 **Interfaces:**
 - Produces: `create_handoff(root, handoff_id, from_role, to_role, task_id, data: dict) -> dict`、`get_handoff(root, handoff_id) -> dict`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 from at_runtime.handoff import create_handoff, get_handoff
@@ -646,9 +646,9 @@ class HandoffTests(unittest.TestCase):
             self.assertEqual(loaded["to"], "code")
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 def create_handoff(root: Path, handoff_id: str, from_role: str, to_role: str, task_id: str, data: dict) -> dict:
@@ -672,9 +672,9 @@ def get_handoff(root: Path, handoff_id: str) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -691,7 +691,7 @@ def get_handoff(root: Path, handoff_id: str) -> dict:
     cwd=项目根，stdout 作为 agent 输出收集。
   - `build_prompt(bundle: dict, role: str) -> str`：渲染 Context Bundle 为 prompt。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 from at_runtime.execution import build_prompt
@@ -720,9 +720,9 @@ class ExecutionTests(unittest.TestCase):
         self.assertIn("exec", command)
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 class ExecutionAdapter:
@@ -784,9 +784,9 @@ Produce the expected output and nothing else.
 """
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -800,7 +800,7 @@ Produce the expected output and nothing else.
 - Produces: `record_event(root, event: str, session: str | None, data: dict | None = None) -> None`、
   `list_events(root, limit: int = 50) -> list[dict]`（`.agent/runtime/events/events.jsonl`）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 from at_runtime.observer import list_events, record_event
@@ -819,9 +819,9 @@ class ObserverTests(unittest.TestCase):
             self.assertEqual(events[1]["data"]["tokens"], 1234)
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 import json
@@ -848,9 +848,9 @@ def list_events(root: Path, limit: int = 50) -> list[dict]:
     return events[-limit:]
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -864,7 +864,7 @@ def list_events(root: Path, limit: int = 50) -> list[dict]:
 - Produces: `propose_knowledge(root, topic, content, source: dict) -> dict`、
   `query_knowledge(root, topic) -> list[dict]`、`get_knowledge(root, ref: str) -> dict | None`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 from at_runtime.knowledge import get_knowledge, propose_knowledge, query_knowledge
@@ -882,9 +882,9 @@ class KnowledgeTests(unittest.TestCase):
             self.assertIsNotNone(get_knowledge(root, ref))
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 import re
@@ -918,9 +918,9 @@ def get_knowledge(root: Path, ref: str) -> dict | None:
     return yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -936,7 +936,7 @@ def get_knowledge(root: Path, ref: str) -> dict | None:
   analysis → code → test 三 session，每步 build_context → spawn → handoff。
   `at task run` 与 `at doctor` 命令。
 
-- [ ] **Step 1: 写失败测试（mock provider）**
+- [x] **Step 1: 写失败测试（mock provider）**
 
 ```python
 from at_runtime.runner import run_task_flow
@@ -960,9 +960,9 @@ class RunnerTests(unittest.TestCase):
             self.assertTrue((root / ".agent/handoffs" / "H-T17-C-T.yaml").exists())
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 def run_task_flow(root: Path, task_id: str, goal: str, refs: dict, provider: str = "mock") -> list[dict]:
@@ -1003,9 +1003,9 @@ def run_task_flow(root: Path, task_id: str, goal: str, refs: dict, provider: str
 
 `at doctor`：检查 `.agent` 目录、manifest/policies 可解析、sessions 无 running 残留。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -1021,7 +1021,7 @@ def run_task_flow(root: Path, task_id: str, goal: str, refs: dict, provider: str
   Baseline（单会话直跑）与 AT 三 session 各跑一遍，产出 success / estimated_tokens /
   handoff_sufficiency。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 from at_runtime.eval import run_minimal_eval
@@ -1039,9 +1039,9 @@ class EvalTests(unittest.TestCase):
             self.assertIn("estimated_tokens", result["at_flow"])
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```python
 def run_minimal_eval(root: Path, demo_task: str, provider: str = "mock") -> dict:
@@ -1060,9 +1060,9 @@ def run_minimal_eval(root: Path, demo_task: str, provider: str = "mock") -> dict
     }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
-- [ ] **Step 5: 记录变更**
+- [x] **Step 5: 记录变更**
 
 ---
 
@@ -1072,27 +1072,27 @@ def run_minimal_eval(root: Path, demo_task: str, provider: str = "mock") -> dict
 - Modify: `README.md`（v2 定位：context-isolated runtime）、`AGENTS.md`（v2 触发与用法）
 - Modify: `docs/developing-at.md` 或新增 v2 文档
 
-- [ ] **Step 1: 更新 README 与 AGENTS.md**
+- [x] **Step 1: 更新 README 与 AGENTS.md**
 
 README 定位改为 "A context-isolated runtime for long-running and parallel coding agents"；
 AGENTS.md 说明 `at` 命令族与 Context Bundle 概念。
 
-- [ ] **Step 2: 全量测试**
+- [x] **Step 2: 全量测试**
 
 Run: `python -m unittest discover -s tests`
 Expected: 全部通过
 
-- [ ] **Step 3: 真实 Codex 冒烟（标注性验证）**
+- [x] **Step 3: 真实 Codex 冒烟（标注性验证）**
 
 Run: `at task run --provider codex`（若本机 codex 可用）；不可用则明确标注"未验证"。
 
-- [ ] **Step 4: 记录变更与汇总**
+- [x] **Step 4: 记录变更与汇总**
 
 勾选全部 checkbox，报告改动、验证、遗留风险（relevance 显式声明的局限、eval 估算精度）。
 
 ## Execution Status
 
 ```text
-Status: in progress
+Status: completed
 Branch: v2.0
 ```

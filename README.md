@@ -101,13 +101,26 @@ V0.5   Benchmark（对比单长会话 / 全量共享 / AT 隔离）
 ## 快速开始（V0.1）
 
 ```powershell
-python -m at_runtime init
-at task start "<task>" --provider mock
-at status
-at context inspect <session-id>
-at handoff inspect <handoff-id>
-at eval
-at doctor
+# Python 3.10+，仓库内建虚拟环境后安装
+python -m venv .venv
+.venv\Scripts\python -m pip install -e .
+
+# 初始化 .agent 工作区
+.venv\Scripts\at init
+
+# 跑一个三 session 流程（analysis -> code -> test，仅通过 handoff 交换）
+.venv\Scripts\at task run T17 "fix beam stability" --constraint "preserve API schema"
+
+# 检查工作区健康
+.venv\Scripts\at doctor
+
+# 查看 Context Bundle / memory / handoff
+.venv\Scripts\at context inspect code-T17-01
+.venv\Scripts\at memory inspect memory://session/code-T17-01/short
+.venv\Scripts\at handoff inspect H-T17-A-C
+
+# 最小对比 eval（baseline 单会话 vs AT 三会话）
+.venv\Scripts\at eval "fix beam stability"
 ```
 
 实现计划见

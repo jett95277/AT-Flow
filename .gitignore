@@ -5,6 +5,7 @@
 .at/translation/
 .at/*.log
 .at/*.sqlite3
+.agent/
 .codex-analysis/
 baize-system/
 baize-claude-extracted/

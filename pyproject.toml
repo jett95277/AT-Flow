@@ -3,18 +3,16 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "at-flow"
+name = "at-runtime"
 version = "0.1.0"
-description = "CLI-first multi-agent orchestration platform"
-requires-python = ">=3.9"
+description = "Context & Memory Control Plane for long-running and parallel coding agents"
+requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.128.8",
-    "uvicorn>=0.39.0",
-    "httpx>=0.28.1",
+    "PyYAML>=6.0",
 ]
 
 [project.scripts]
-at = "at_flow.cli:main"
+at = "at_runtime.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

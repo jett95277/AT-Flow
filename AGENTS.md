@@ -1,74 +1,59 @@
-
-
-# AT Flow Trigger
+# AT Runtime Trigger
 
 <!-- AT_FLOW_TRIGGER_BEGIN -->
 
-This project has AT Flow enabled.
-
-AT is a conversation-controlled multi-agent runtime. The user-facing interface is
-the Codex conversation. The CLI command is only the background runtime.
-
-## Usage Modes
-
-AT has two official usage modes:
-
-1. Codex Conversation Mode: the user works inside Codex chat; AT renders status
-   first and then uses Codex/provider as the execution layer.
-2. Web Console Mode: the user works in the browser; the backend calls the same
-   AT runtime, session state, provider adapters, artifacts, trace, and audit.
-
-AT state machine must be shown before Codex/provider execution. Codex is a
-mature code-agent provider, but AT owns orchestration, state transitions,
-permission boundaries, handoff, artifact validation, trace, and audit.
+This project is AT Runtime (v2.0): a context-isolated runtime for long-running
+and parallel coding agents. AT owns Context / Memory / Scope / Handoff;
+Codex is the execution layer.
 
 ## Trigger Rules
 
-When the user's message is exactly one of these:
+When the user's message is exactly one of:
 
 - `AT`
 - `AT:`
 - `AT：`
 
-do not answer conversationally. Run this command and show its output exactly as
-the AT ASCII control panel:
+run `at doctor` and show the JSON report as the AT control panel:
 
 ```powershell
-python "E:\AT FLOW\at.py" --root "E:\AT FLOW" panel --format chat
+python "E:\AT FLOW\.venv\Scripts\at.exe" doctor
 ```
 
 When the user's message starts with `AT:` or `AT：`, treat it as an AT command.
-Keep the display order strict:
+All commands run with cwd = the project root.
 
-1. AT state machine
-2. Current stage
-3. Stage details
-4. Codex execution layer
+## Command Mapping (v2)
 
-Do not describe Codex capabilities before the AT state machine.
+- `AT: init` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" init`
+- `AT: doctor` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" doctor`
+- `AT: task run, <task-id>, <goal>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" task run <task-id> "<goal>" --provider mock`
+- `AT: context inspect, <session-id>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" context inspect <session-id>`
+- `AT: memory inspect, <memory-uri>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory inspect <memory-uri>`
+- `AT: handoff inspect, <handoff-id>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" handoff inspect <handoff-id>`
+- `AT: eval, <demo-task>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" eval "<demo-task>"`
 
-## Command Mapping
+If a command needs a `<session-id>` / `<handoff-id>` and the user did not
+provide one, list candidates from `.agent/runtime/sessions/` and
+`.agent/handoffs/` under the project root.
 
-Use these mappings:
+## Context Bundle Concept
 
-- `AT: init` -> `python "E:\AT FLOW\at.py" --root "E:\AT FLOW" init`
-- `AT: status` -> `python "E:\AT FLOW\at.py" --root "E:\AT FLOW" panel --format chat`
-- `AT: list` -> `python "E:\AT FLOW\at.py" --root "E:\AT FLOW" list --format chat`
-- `AT: next` -> run the current session one step with `run <session-id> --one-step --format chat`
-- `AT: continue` -> run the current session with `run <session-id> --format chat`
-- `AT: retry` -> retry the first failed step with `retry <session-id> --format chat`
-- `AT: start task, <task>` -> `python "E:\AT FLOW\at.py" --root "E:\AT FLOW" start "<task>" --format chat`
-- `AT: start task, <task> --run` -> `python "E:\AT FLOW\at.py" --root "E:\AT FLOW" start "<task>" --run --format chat`
+AT builds a fresh Context Bundle for every session; context is never inherited
+from a previous conversation. A bundle contains:
 
-If a command needs `<session-id>` and the user did not provide one, use the
-latest AT session from `python "E:\AT FLOW\at.py" --root "E:\AT FLOW" list`. If there is no
-session, show the AT control panel and ask for `AT: start task, <task>`.
+- `task` (id, goal) and `role` (type)
+- `constraints` and `handoff` (from previous agent, summary + ref)
+- `evidence` (file refs), `relevant_memory` (memory:// refs), `knowledge`
+- `token_budget` and `provenance`
 
-## Output Rules
-
-- Always show the AT ASCII state machine before any explanation.
-- Preserve code blocks produced by `--format chat`.
-- Do not replace the ASCII panel with prose.
-- Keep Codex/provider as the execution layer, not the flow owner.
+Agents only exchange results through structured Handoffs; they do not share
+conversations. Short memory is per-session; medium memory is task/feature
+scoped; long memory is project scoped and requires promotion.
 
 <!-- AT_FLOW_TRIGGER_END -->
