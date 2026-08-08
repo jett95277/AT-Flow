@@ -43,6 +43,8 @@ All commands run with cwd = the project root.
 - `AT: memory timeline` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" memory timeline`
 - `AT: memory rollback, <node>` ->
   `python "E:\AT FLOW\.venv\Scripts\at.exe" memory rollback <node>`
+- `AT: memory export` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory export`
 
 ## Memory Write Convention (stage completion)
 
@@ -57,6 +59,22 @@ persist structured memory into the three-tier store:
 
 Write to `memory://session/<id>/short` at stage completion; the human decides
 whether to promote to medium / long via `at memory promote`.
+
+## Development Workflow (Superpowers integration, v2.2)
+
+Complex multi-step tasks reuse the Superpowers workflow (installed at
+`C:\Users\kk\.codex\plugins\cache\openai-curated-remote\superpowers\6.2.0`).
+AT stays the memory layer; Superpowers drives "how to do the work":
+
+1. Task start: `at memory write memory://task/<task-id>/medium --conclusion "<goal>" --project <name>`
+2. Plan: use `superpowers:writing-plans` to write the implementation plan
+3. Execute: use `superpowers:executing-plans` (inline; subagent-driven is
+   unavailable in this environment) to run the plan task-by-task
+4. Stage completion: `at memory write memory://session/<stage>-<task>/short
+   --conclusion ... --constraint ... --unresolved ... --task <task-id>`
+5. Milestone: say "打点" / use `at-memory-checkpoint` skill to snapshot
+6. Later sessions: `at memory get memory://task/<task-id>/medium` to restore
+   context; `at memory view` for the full picture
 
 ## Memory Read Convention
 

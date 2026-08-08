@@ -116,10 +116,13 @@ python -m venv .venv
 .venv\Scripts\at memory checkpoint "fix beam stability"
 .venv\Scripts\at memory timeline
 .venv\Scripts\at memory rollback 20260808T114110-fix-beam-stability
+
+# 导出三层记忆为 Markdown 报告
+.venv\Scripts\at memory export
 ```
 
 v2.1 记忆层命令族（`at memory write / get / view / promote / archive /
-discard / checkpoint / timeline / rollback`）已实现，实现计划见
+discard / checkpoint / timeline / rollback / export`）已实现，实现计划见
 `docs/superpowers/plans/2026-08-08-at-v2-1-memory-mvp-implementation-plan.md`。
 
 ## 文档索引
