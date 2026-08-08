@@ -18,7 +18,7 @@ When the user's message is exactly one of:
 run `at doctor` and show the JSON report as the AT control panel:
 
 ```powershell
-python "E:\AT FLOW\.venv\Scripts\at.exe" doctor
+E:\AT FLOW\.venv\Scripts\at.exe doctor
 ```
 
 When the user's message starts with `AT:` or `AT：`, treat it as an AT command.
@@ -26,25 +26,25 @@ All commands run with cwd = the project root.
 
 ## Command Mapping (memory layer)
 
-- `AT: doctor` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" doctor`
+- `AT: doctor` -> `E:\AT FLOW\.venv\Scripts\at.exe doctor`
 - `AT: memory write, <memory-uri>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory write <memory-uri> --conclusion "<text>" [--constraint "<text>"]... [--unresolved "<text>"]... [--task <id>] [--project <name>]`
+  `E:\AT FLOW\.venv\Scripts\at.exe memory write <memory-uri> --conclusion "<text>" [--constraint "<text>"]... [--unresolved "<text>"]... [--task <id>] [--project <name>]`
 - `AT: memory get, <memory-uri>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory get <memory-uri>`
-- `AT: memory view` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" memory view`
+  `E:\AT FLOW\.venv\Scripts\at.exe memory get <memory-uri>`
+- `AT: memory view` -> `E:\AT FLOW\.venv\Scripts\at.exe memory view`
 - `AT: memory promote, <memory-uri>, [to <tier>]` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory promote <memory-uri> [--to medium|long]`
+  `E:\AT FLOW\.venv\Scripts\at.exe memory promote <memory-uri> [--to medium|long]`
 - `AT: memory archive, <memory-uri>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory archive <memory-uri>`
+  `E:\AT FLOW\.venv\Scripts\at.exe memory archive <memory-uri>`
 - `AT: memory discard, <memory-uri>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory discard <memory-uri>`
+  `E:\AT FLOW\.venv\Scripts\at.exe memory discard <memory-uri>`
 - `AT: memory checkpoint, <label>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory checkpoint <label>`
-- `AT: memory timeline` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" memory timeline`
+  `E:\AT FLOW\.venv\Scripts\at.exe memory checkpoint <label>`
+- `AT: memory timeline` -> `E:\AT FLOW\.venv\Scripts\at.exe memory timeline`
 - `AT: memory rollback, <node>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory rollback <node>`
+  `E:\AT FLOW\.venv\Scripts\at.exe memory rollback <node>`
 - `AT: memory export` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory export`
+  `E:\AT FLOW\.venv\Scripts\at.exe memory export`
 
 ## Memory Write Convention (stage completion)
 
