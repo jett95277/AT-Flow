@@ -2,9 +2,10 @@
 
 <!-- AT_FLOW_TRIGGER_BEGIN -->
 
-This project is AT Runtime (v2.0): a context-isolated runtime for long-running
-and parallel coding agents. AT owns Context / Memory / Scope / Handoff;
-Codex is the execution layer.
+This project is AT Runtime (v2.x): a **memory layer** for personal AI-assisted
+development workflows. AT manages three-tier memory (short / medium / long) —
+visibility, manual operations, and lifecycle. It does NOT orchestrate agents;
+workflow / knowledge / execution are reused from open source.
 
 ## Trigger Rules
 
@@ -23,37 +24,56 @@ python "E:\AT FLOW\.venv\Scripts\at.exe" doctor
 When the user's message starts with `AT:` or `AT：`, treat it as an AT command.
 All commands run with cwd = the project root.
 
-## Command Mapping (v2)
+## Command Mapping (memory layer)
 
-- `AT: init` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" init`
 - `AT: doctor` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" doctor`
-- `AT: task run, <task-id>, <goal>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" task run <task-id> "<goal>" --provider mock`
-- `AT: context inspect, <session-id>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" context inspect <session-id>`
-- `AT: memory inspect, <memory-uri>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory inspect <memory-uri>`
-- `AT: handoff inspect, <handoff-id>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" handoff inspect <handoff-id>`
-- `AT: eval, <demo-task>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" eval "<demo-task>"`
+- `AT: memory write, <memory-uri>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory write <memory-uri> --conclusion "<text>" [--constraint "<text>"]... [--unresolved "<text>"]... [--task <id>] [--project <name>]`
+- `AT: memory get, <memory-uri>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory get <memory-uri>`
+- `AT: memory view` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" memory view`
+- `AT: memory promote, <memory-uri>, [to <tier>]` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory promote <memory-uri> [--to medium|long]`
+- `AT: memory archive, <memory-uri>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory archive <memory-uri>`
+- `AT: memory discard, <memory-uri>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory discard <memory-uri>`
+- `AT: memory checkpoint, <label>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory checkpoint <label>`
+- `AT: memory timeline` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" memory timeline`
+- `AT: memory rollback, <node>` ->
+  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory rollback <node>`
 
-If a command needs a `<session-id>` / `<handoff-id>` and the user did not
-provide one, list candidates from `.agent/runtime/sessions/` and
-`.agent/handoffs/` under the project root.
+## Memory Write Convention (stage completion)
 
-## Context Bundle Concept
+At the end of each development stage, Codex should call `at memory write` to
+persist structured memory into the three-tier store:
 
-AT builds a fresh Context Bundle for every session; context is never inherited
-from a previous conversation. A bundle contains:
+- `--conclusion`: what was decided / found
+- `--constraint`: hard constraints discovered (repeatable)
+- `--unresolved`: open questions / risks (repeatable)
+- `--task` / `--project`: ownership used later by `promote --to` for scope
+  migration (session -> task -> project)
 
-- `task` (id, goal) and `role` (type)
-- `constraints` and `handoff` (from previous agent, summary + ref)
-- `evidence` (file refs), `relevant_memory` (memory:// refs), `knowledge`
-- `token_budget` and `provenance`
+Write to `memory://session/<id>/short` at stage completion; the human decides
+whether to promote to medium / long via `at memory promote`.
 
-Agents only exchange results through structured Handoffs; they do not share
-conversations. Short memory is per-session; medium memory is task/feature
-scoped; long memory is project scoped and requires promotion.
+## Memory Read Convention
+
+When a later session needs prior context, call
+`at memory get <memory-uri>` to read structured entries; do not read
+`.agent/memory/` files directly.
+
+## Checkpoint Skill
+
+When the user says "打点", "记录时间节点", "存个档", or "checkpoint", use the
+`at-memory-checkpoint` skill to run `at memory checkpoint <label>`.
+
+## Context Bundle Note
+
+Context Bundle / Handoff / policy orchestration are V0.1 verification
+artifacts (kept in code, out of the v2.1 core). The memory layer only owns
+three-tier memory storage, structured write/read, tree view, manual
+promote/archive/discard, timeline checkpoint/rollback, and audit events.
 
 <!-- AT_FLOW_TRIGGER_END -->

@@ -1,26 +1,29 @@
-# AT v2.1 Memory MVP Implementation Plan
+# AT v2.1 Memory Layer MVP Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 交付 v2.1 记忆 MVP：三层记忆的树视图、人工操作（promote/archive/discard）、生命线（checkpoint/timeline/rollback）与 checkpoint skill 触发。
+**Goal:** 交付 v2.1 记忆层 MVP：结构化写入（三字段）、树视图、人工操作（promote/archive/discard，promote 跨层迁移 scope）、生命线（checkpoint/timeline/rollback）与 checkpoint skill 触发。
 
-**Architecture:** 在现有 V0.1 基础上扩展。`memory.py` 增加状态机操作与跨层迁移；新增 `view.py` 渲染三层树；新增 `timeline.py` 管理生命线快照（全量复制 + 回滚带安全恢复点）；CLI 接入 `at memory` 命令族；`at-memory-checkpoint` skill 用触发词调用 checkpoint。
+**Architecture:** AT 是纯记忆层，不做编排。`memory.py` 增加状态机操作、结构化写入与跨层 scope 迁移；新增 `view.py` 渲染三层树；新增 `timeline.py` 管理生命线快照；CLI 接入 `at memory` 命令族；`at-memory-checkpoint` skill 用触发词调用 checkpoint。V0.1 验证件（registry/context/policy/handoff/runner/eval）不改动。
 
 **Tech Stack:** Python 3.10+（开发验证用 `.venv`，Python 3.12）、PyYAML、标准库（pathlib/shutil/datetime）、unittest。
 
 ## Global Constraints
 
-- 规格来源：`docs/superpowers/specs/2026-08-08-at-v2-context-runtime-design.md`（整合版）。
-- 核心只做三层记忆 + 可见性 + 人工操作 + 生命线；registry/context/policy/handoff 不再扩展。
-- 开发过程中不 commit/push，最后统一提交（沿用 v2.0 惯例）。
-- 状态机人工驱动：promotion/清理是人工决策，不做自动 GC/自动提升。
-- 快照 = 全量复制（不做 diff）；回滚 = 覆盖恢复且回滚前自动打恢复点。
+- 规格来源：`docs/superpowers/specs/2026-08-08-at-v2-context-runtime-design.md`（记忆层版）。
+- AT 是记忆层：不编排 agent；写入与打点由外部（Codex / Superpowers / 人工）触发。
+- 核心只做三层记忆 + 结构化写入 + 树视图 + 人工操作 + 生命线；V0.1 验证件（registry/context/policy/handoff/runner/eval）不改动。
+- 状态机人工驱动：promotion / 清理是人工决策，不做自动 GC/自动提升。
+- promote 跨层必须同时迁移 scope：session→task（用条目 source.task）、task→project（用条目 source.project）。
+- 结构化写入三字段：conclusion / constraints / unresolved；部分缺失允许，全部缺失拒绝。
+- 快照 = 全量复制（不做 diff）；rollback = 覆盖恢复且回滚前自动打恢复点。
 - 存储：Markdown 正文 + YAML 多文档流元数据；`.agent/` 与 v1 `.at/` 隔离。
+- 开发中每个任务本地 commit（不 push），全部完成后统一 push。
 - 测试命令统一用 `E:\AT FLOW\.venv\Scripts\python.exe -m unittest <module> -v`，工作目录 `E:\AT FLOW`。
 
 ---
 
-### Task 1: Memory 状态机操作（promote / archive / discard）
+### Task 1: Memory 状态机操作（promote / archive / discard）+ 跨层 scope 迁移
 
 **Files:**
 - Modify: `src/at_runtime/memory.py`
@@ -36,61 +39,73 @@
   - `discard_memory(root, uri) -> dict`
   - `list_tier_entries(root, tier, include_all=False) -> list[dict]`（每条含 `uri`）
 
-规则：同层 promote 按 `candidate→active→verified` 升级，`verified` 再 promote
-抛 `ValueError`；`--to <tier>` 跨层迁移文件并置 `active`（来源 `verified` 且
-目标 `long` 时保持 `verified`）；archive/discard 对文件内全部条目统一置状态。
+规则：同层 promote 按 `candidate→active→verified` 升级；`--to` 跨层时
+**迁移 scope 与 tier**——目标 scope 从条目 `source.task`（→medium）或
+`source.project`（→long）推导，缺失则抛 `ValueError`；来源 `verified` 且
+目标 long 时保持 `verified`，否则置 `active`。archive/discard 对文件内全部
+条目统一置状态。
 
 - [ ] **Step 1: 写失败测试**
 
 ```python
 # tests/test_memory.py 追加
 class MemoryLifecycleTests(unittest.TestCase):
-    def _write(self, root, uri, content="finding", **kw):
-        write_memory(root, uri, content, source={"session": "s1"}, **kw)
+    def _write(self, root, uri, content="finding", source=None, **kw):
+        write_memory(root, uri, content, source=source or {"session": "s1"}, **kw)
 
     def test_promote_same_tier_moves_status(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialize_workspace(root)
             self._write(root, "memory://task/T17/medium")
-            first = promote_memory(root, "memory://task/T17/medium")
-            self.assertEqual(first["status"], "active")
-            second = promote_memory(root, "memory://task/T17/medium")
-            self.assertEqual(second["status"], "verified")
+            self.assertEqual(
+                promote_memory(root, "memory://task/T17/medium")["status"], "active"
+            )
+            self.assertEqual(
+                promote_memory(root, "memory://task/T17/medium")["status"], "verified"
+            )
             with self.assertRaises(ValueError):
                 promote_memory(root, "memory://task/T17/medium")
 
-    def test_promote_cross_tier_keeps_verified_to_long(self):
+    def test_promote_cross_tier_migrates_scope_session_to_task(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialize_workspace(root)
-            self._write(root, "memory://session/A/short")
-            promote_memory(root, "memory://session/A/short")
-            promote_memory(root, "memory://session/A/short")  # candidate→active→verified
-            result = promote_memory(root, "memory://session/A/short", to_tier="long")
-            self.assertEqual(result["status"], "verified")
-            self.assertTrue((root / ".agent/memory/long/session-A.md").exists())
-            self.assertFalse((root / ".agent/memory/short/session-A.md").exists())
-
-    def test_promote_cross_tier_medium_from_short(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            initialize_workspace(root)
-            self._write(root, "memory://session/A/short")
+            self._write(root, "memory://session/A/short", source={"task": "T17"})
             result = promote_memory(root, "memory://session/A/short", to_tier="medium")
             self.assertEqual(result["status"], "active")
-            self.assertTrue((root / ".agent/memory/medium/session-A.md").exists())
+            self.assertTrue((root / ".agent/memory/medium/task-T17.md").exists())
             self.assertFalse((root / ".agent/memory/short/session-A.md").exists())
+
+    def test_promote_cross_tier_task_to_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            self._write(root, "memory://task/T17/medium", source={"project": "ASR"})
+            promote_memory(root, "memory://task/T17/medium")
+            result = promote_memory(root, "memory://task/T17/medium", to_tier="long")
+            self.assertEqual(result["status"], "verified")
+            self.assertTrue((root / ".agent/memory/long/project-ASR.md").exists())
+
+    def test_promote_cross_tier_requires_scope_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            self._write(root, "memory://session/A/short", source={})
+            with self.assertRaises(ValueError):
+                promote_memory(root, "memory://session/A/short", to_tier="medium")
 
     def test_archive_and_discard(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialize_workspace(root)
             self._write(root, "memory://session/A/short")
-            archived = archive_memory(root, "memory://session/A/short")
-            self.assertEqual(archived["status"], "archived")
-            discarded = discard_memory(root, "memory://session/A/short")
-            self.assertEqual(discarded["status"], "deprecated")
+            self.assertEqual(
+                archive_memory(root, "memory://session/A/short")["status"], "archived"
+            )
+            self.assertEqual(
+                discard_memory(root, "memory://session/A/short")["status"], "deprecated"
+            )
 
     def test_list_tier_entries_excludes_inactive_by_default(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -102,6 +117,18 @@ class MemoryLifecycleTests(unittest.TestCase):
             self.assertEqual(len(entries), 1)
             self.assertEqual(entries[0]["uri"], "memory://session/A/short")
             self.assertEqual(len(list_tier_entries(root, "short", include_all=True)), 2)
+
+    def test_lifecycle_records_audit_events(self):
+        from at_runtime.observer import list_events
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            self._write(root, "memory://session/A/short", source={"task": "T17"})
+            promote_memory(root, "memory://session/A/short", to_tier="medium")
+            archive_memory(root, "memory://task/T17/medium")
+            events = [e["event"] for e in list_events(root)]
+            self.assertIn("memory.promoted", events)
+            self.assertIn("memory.archived", events)
 ```
 
 文件头导入追加：
@@ -146,9 +173,25 @@ def list_tier_entries(
     return entries
 
 
-def _update_entries(root: Path, uri: str, status: str | None = None,
-                    to_tier: str | None = None) -> dict[str, Any]:
-    scope, name, tier = _parse_uri(uri)
+def _cross_tier_target(entry: dict[str, Any], uri: str, to_tier: str) -> str:
+    scope, name, _ = _parse_uri(uri)
+    source = entry.get("source")
+    if not isinstance(source, dict):
+        source = {}
+    if to_tier == "medium":
+        task = source.get("task")
+        if not task:
+            raise ValueError("缺少 task 归属（source.task），无法提升到 medium")
+        return f"memory://task/{task}/medium"
+    if to_tier == "long":
+        project = source.get("project")
+        if not project:
+            raise ValueError("缺少 project 归属（source.project），无法提升到 long")
+        return f"memory://project/{project}/long"
+    raise ValueError(f"unknown target tier: {to_tier}")
+
+
+def promote_memory(root: Path, uri: str, to_tier: str | None = None) -> dict[str, Any]:
     path = memory_path(root, uri)
     if not path.exists():
         raise FileNotFoundError(f"unknown memory: {uri}")
@@ -158,53 +201,55 @@ def _update_entries(root: Path, uri: str, status: str | None = None,
     if to_tier:
         if to_tier not in TIER_DIRS:
             raise ValueError(f"unknown tier: {to_tier}")
+        new_uri = _cross_tier_target(entries[-1], uri, to_tier)
         for entry in entries:
             entry["status"] = (
                 "verified"
                 if entry["status"] == "verified" and to_tier == "long"
                 else "active"
             )
-        new_uri = f"memory://{scope}/{name}/{to_tier}"
         new_path = memory_path(root, new_uri)
         new_path.parent.mkdir(parents=True, exist_ok=True)
         if new_path.exists():
             entries = _load_entries(new_path) + entries
         _save_entries(new_path, entries)
         path.unlink()
+        record_event(root, "memory.promoted", None,
+                     {"from": uri, "to": new_uri, "tier": to_tier})
         return entries[-1]
-    if status:
-        for entry in entries:
-            entry["status"] = status
-        _save_entries(path, entries)
-        return entries[-1]
-    raise ValueError("nothing to do")
+    current = entries[-1]["status"]
+    if current not in STATUS_NEXT:
+        raise ValueError(f"cannot promote status {current!r}")
+    entries[-1]["status"] = STATUS_NEXT[current]
+    _save_entries(path, entries)
+    record_event(root, "memory.promoted", None,
+                 {"uri": uri, "status": entries[-1]["status"]})
+    return entries[-1]
 
 
-def promote_memory(root: Path, uri: str, to_tier: str | None = None) -> dict[str, Any]:
-    if to_tier:
-        return _update_entries(root, uri, to_tier=to_tier)
-    scope, name, tier = _parse_uri(uri)
+def _update_entries(root: Path, uri: str, status: str, event: str) -> dict[str, Any]:
     path = memory_path(root, uri)
     if not path.exists():
         raise FileNotFoundError(f"unknown memory: {uri}")
     entries = _load_entries(path)
     if not entries:
         raise ValueError(f"empty memory: {uri}")
-    current = entries[-1]["status"]
-    if current not in STATUS_NEXT:
-        raise ValueError(f"cannot promote status {current!r}")
-    entries[-1]["status"] = STATUS_NEXT[current]
+    for entry in entries:
+        entry["status"] = status
     _save_entries(path, entries)
+    record_event(root, event, None, {"uri": uri, "status": status})
     return entries[-1]
 
 
 def archive_memory(root: Path, uri: str) -> dict[str, Any]:
-    return _update_entries(root, uri, status="archived")
+    return _update_entries(root, uri, "archived", "memory.archived")
 
 
 def discard_memory(root: Path, uri: str) -> dict[str, Any]:
-    return _update_entries(root, uri, status="deprecated")
+    return _update_entries(root, uri, "deprecated", "memory.discarded")
 ```
+
+文件头追加导入：`from at_runtime.observer import record_event`。
 
 同时把 `memory_path` 改为复用 `_parse_uri`（保持行为不变）：
 
@@ -217,13 +262,207 @@ def memory_path(root: Path, uri: str) -> Path:
 - [ ] **Step 4: 确认测试通过**
 
 Run: `E:\AT FLOW\.venv\Scripts\python.exe -m unittest tests.test_memory -v`
-Expected: PASS（原 5 个 + 新增 5 个，共 10 个）
+Expected: PASS（原 5 个 + 新增 6 个，共 11 个）
 
-- [ ] **Step 5: 记录变更（不 commit，最后统一提交）**
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/test_memory.py src/at_runtime/memory.py
+git commit -m "feat: add memory lifecycle operations with scope migration"
+```
 
 ---
 
-### Task 2: 树视图 + CLI 接线
+### Task 2: 结构化写入（at memory write 三字段）
+
+**Files:**
+- Modify: `src/at_runtime/memory.py`
+- Modify: `src/at_runtime/cli.py`
+- Test: `tests/test_memory.py`
+
+**Interfaces:**
+- Consumes: `write_memory(root, uri, content, source, status)`（现有）
+- Produces:
+  - `write_memory_structured(root, uri, conclusion="", constraints=None,
+    unresolved=None, source=None) -> dict`
+
+规则：条目结构为 `{uri, content: conclusion, constraints: [...],
+unresolved: [...], status: "candidate", source, created_at}`；三字段全部为空
+时报 `ValueError`；`source` 支持 `task` / `project` 归属（供跨层 promote）。
+
+- [ ] **Step 1: 写失败测试**
+
+```python
+# tests/test_memory.py 追加
+class StructuredWriteTests(unittest.TestCase):
+    def test_write_structured_three_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            item = write_memory_structured(
+                root,
+                "memory://session/A/short",
+                conclusion="beam < 2 skipped",
+                constraints=["keep schema"],
+                unresolved=["threshold config?"],
+                source={"task": "T17"},
+            )
+            self.assertEqual(item["content"], "beam < 2 skipped")
+            self.assertEqual(item["constraints"], ["keep schema"])
+            self.assertEqual(item["unresolved"], ["threshold config?"])
+            self.assertEqual(item["status"], "candidate")
+            loaded = read_memory(root, "memory://session/A/short")[0]
+            self.assertEqual(loaded["constraints"], ["keep schema"])
+            self.assertEqual(loaded["source"], {"task": "T17"})
+
+    def test_write_structured_partial_fields_allowed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            item = write_memory_structured(root, "memory://session/A/short",
+                                           conclusion="only conclusion")
+            self.assertEqual(item["constraints"], [])
+            self.assertEqual(item["unresolved"], [])
+
+    def test_write_structured_all_empty_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            with self.assertRaises(ValueError):
+                write_memory_structured(root, "memory://session/A/short")
+
+    def test_get_returns_structured_entries(self):
+        from at_runtime.memory import read_memory
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            write_memory_structured(root, "memory://task/T17/medium",
+                                    conclusion="root cause",
+                                    constraints=["keep schema"])
+            loaded = read_memory(root, "memory://task/T17/medium")
+            self.assertEqual(loaded[0]["content"], "root cause")
+            self.assertEqual(loaded[0]["constraints"], ["keep schema"])
+
+    def test_write_records_audit_event(self):
+        from at_runtime.observer import list_events
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            write_memory_structured(root, "memory://session/A/short",
+                                    conclusion="note")
+            events = [e["event"] for e in list_events(root)]
+            self.assertIn("memory.write", events)
+```
+
+文件头导入追加：
+`from at_runtime.memory import write_memory_structured`
+
+- [ ] **Step 2: 确认测试失败**
+
+Run: `E:\AT FLOW\.venv\Scripts\python.exe -m unittest tests.test_memory -v`
+Expected: FAIL —— `ImportError: cannot import name 'write_memory_structured'`
+
+- [ ] **Step 3: 实现**
+
+```python
+# src/at_runtime/memory.py 追加
+def write_memory_structured(
+    root: Path,
+    uri: str,
+    conclusion: str = "",
+    constraints: list[str] | None = None,
+    unresolved: list[str] | None = None,
+    source: dict | None = None,
+) -> dict[str, Any]:
+    constraints = constraints or []
+    unresolved = unresolved or []
+    if not conclusion and not constraints and not unresolved:
+        raise ValueError("at least one field required (conclusion/constraints/unresolved)")
+    item = {
+        "uri": uri,
+        "content": conclusion,
+        "constraints": constraints,
+        "unresolved": unresolved,
+        "status": "candidate",
+        "source": source or {},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    path = memory_path(root, uri)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entries = _load_entries(path) if path.exists() else []
+    entries.append(item)
+    _save_entries(path, entries)
+    record_event(root, "memory.write", None,
+                 {"uri": uri, "content_length": len(conclusion)})
+    return item
+```
+
+`cli.py` 的 `memory` 子命令追加 `write`：
+
+```python
+    write = memory_sub.add_parser("write", help="write structured memory (three fields)")
+    write.add_argument("uri")
+    write.add_argument("--conclusion", default="", help="conclusion text")
+    write.add_argument("--constraint", action="append", default=[],
+                       help="constraint (repeatable)")
+    write.add_argument("--unresolved", action="append", default=[],
+                       help="unresolved item (repeatable)")
+    write.add_argument("--task", default=None, help="task id for promote scope migration")
+    write.add_argument("--project", default=None, help="project name for promote scope migration")
+```
+
+同时追加 `get` 子命令（Agent 读取入口）：
+
+```python
+    get = memory_sub.add_parser("get", help="read structured memory entries (for agents)")
+    get.add_argument("uri")
+```
+
+`main()` 内 `memory` 分支追加：
+
+```python
+        if args.memory_command == "write":
+            source = {}
+            if args.task:
+                source["task"] = args.task
+            if args.project:
+                source["project"] = args.project
+            result = write_memory_structured(
+                root, args.uri,
+                conclusion=args.conclusion,
+                constraints=args.constraint,
+                unresolved=args.unresolved,
+                source=source or None,
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.memory_command == "get":
+            entries = read_memory(root, args.uri)
+            print(json.dumps(entries, ensure_ascii=False, indent=2))
+            return 0
+```
+
+`cli.py` 导入追加：
+`from at_runtime.memory import read_memory, write_memory_structured`
+
+`write_memory_structured` 实现文件头追加导入：
+`from at_runtime.observer import record_event`
+
+- [ ] **Step 4: 确认测试通过**
+
+Run: `E:\AT FLOW\.venv\Scripts\python.exe -m unittest tests.test_memory -v`
+Expected: PASS（新增 5 个，共 16 个）
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/test_memory.py src/at_runtime/memory.py src/at_runtime/cli.py
+git commit -m "feat: add structured memory write with three fields"
+```
+
+---
+
+### Task 3: 树视图 + CLI 接线
 
 **Files:**
 - Create: `src/at_runtime/view.py`
@@ -233,6 +472,9 @@ Expected: PASS（原 5 个 + 新增 5 个，共 10 个）
 **Interfaces:**
 - Consumes: `list_tier_entries(root, tier, include_all=False) -> list[dict]`（Task 1）
 - Produces: `render_memory_tree(root, include_all=False) -> str`
+
+规则：short 默认折叠（只显示 "n scopes, m entries" 统计行），medium/long
+完整显示；`--all` 展开 short 明细与 inactive 条目。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -247,36 +489,47 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from at_runtime.memory import write_memory
+from at_runtime.memory import write_memory_structured
 from at_runtime.view import render_memory_tree
 from at_runtime.workspace import initialize_workspace
 
 
 class ViewTests(unittest.TestCase):
-    def test_tree_shows_three_tiers_and_entries(self):
+    def test_tree_shows_tiers_and_medium_detail(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialize_workspace(root)
-            write_memory(root, "memory://session/A/short", "short note",
-                         source={"session": "A"})
-            write_memory(root, "memory://task/T17/medium", "root cause",
-                         source={"session": "code-T17"})
+            write_memory_structured(root, "memory://session/A/short",
+                                    conclusion="draft note")
+            write_memory_structured(root, "memory://task/T17/medium",
+                                    conclusion="root cause",
+                                    constraints=["keep schema"])
             tree = render_memory_tree(root)
             self.assertIn("memory", tree)
             self.assertIn("short", tree)
             self.assertIn("medium", tree)
             self.assertIn("long", tree)
-            self.assertIn("session-A", tree)
-            self.assertIn("task-T17", tree)
-            self.assertIn("short note", tree)
             self.assertIn("root cause", tree)
+            self.assertIn("task-T17", tree)
+
+    def test_short_collapsed_by_default_and_expanded_with_all(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            write_memory_structured(root, "memory://session/A/short",
+                                    conclusion="draft note")
+            self.assertNotIn("draft note", render_memory_tree(root))
+            self.assertIn("draft note", render_memory_tree(root, include_all=True))
 
     def test_tree_hides_inactive_by_default(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialize_workspace(root)
-            write_memory(root, "memory://session/A/short", "hidden",
-                         source={"session": "A"}, status="archived")
+            write_memory_structured(root, "memory://task/T17/medium",
+                                    conclusion="hidden",
+                                    source={"project": "P"})
+            from at_runtime.memory import archive_memory
+            archive_memory(root, "memory://task/T17/medium")
             self.assertNotIn("hidden", render_memory_tree(root))
             self.assertIn("hidden", render_memory_tree(root, include_all=True))
 ```
@@ -302,57 +555,116 @@ def render_memory_tree(root: Path, include_all: bool = False) -> str:
     for index, tier in enumerate(("short", "medium", "long")):
         branch = "└──" if index == 2 else "├──"
         lines.append(f"{branch} {tier}")
+        entries = list_tier_entries(root, tier, include_all=include_all)
+        if tier == "short" and not include_all:
+            scopes = {entry.get("uri", "").split("/")[2] for entry in entries}
+            lines.append(f"│   └── ({len(scopes)} scopes, {len(entries)} entries)")
+            continue
         by_name: dict[str, list[dict]] = {}
-        for entry in list_tier_entries(root, tier, include_all=include_all):
-            uri = entry.get("uri", "")
-            parts = uri.split("/")
+        for entry in entries:
+            parts = entry.get("uri", "").split("/")
             name = f"{parts[2]}-{parts[3]}" if len(parts) >= 5 else "unknown"
             by_name.setdefault(name, []).append(entry)
-        for name_index, (name, entries) in enumerate(sorted(by_name.items())):
+        for name_index, (name, name_entries) in enumerate(sorted(by_name.items())):
             name_branch = "└──" if name_index == len(by_name) - 1 else "├──"
             lines.append(f"│   {name_branch} {name}")
-            for entry in entries:
+            for entry in name_entries:
                 status = entry.get("status", "candidate")
                 content = (entry.get("content", "") or "").splitlines()[0][:50]
-                source = str(entry.get("source", ""))
                 created = entry.get("created_at", "")[:16]
                 lines.append(
-                    f"│   │   └── [{status}] {content} · {source} · {created}"
+                    f"│   │   └── [{status}] {content} · {created}"
                 )
     return "\n".join(lines)
 ```
 
-`cli.py` 的 `memory` 子命令扩展为：
+`cli.py` 追加 `view` 子命令（沿用 Task 2 的 memory 子命令结构）：
 
 ```python
-    memory_parser = subparsers.add_parser("memory", help="inspect and manage memory")
-    memory_sub = memory_parser.add_subparsers(dest="memory_command", required=True)
-    inspect = memory_sub.add_parser("inspect", help="show memory entries for a uri")
-    inspect.add_argument("uri", help="memory://<scope>/<name>/<tier>")
     view = memory_sub.add_parser("view", help="show memory tree")
-    view.add_argument("--all", action="store_true", help="include archived/deprecated")
+    view.add_argument("--all", action="store_true",
+                      help="include archived/deprecated and expand short")
+```
+
+`main()` 内 `memory` 分支追加：
+
+```python
+        if args.memory_command == "view":
+            print(render_memory_tree(root, include_all=args.all))
+            return 0
+```
+
+`cli.py` 导入追加：
+`from at_runtime.view import render_memory_tree`
+
+- [ ] **Step 4: 确认测试通过**
+
+Run: `E:\AT FLOW\.venv\Scripts\python.exe -m unittest tests.test_view tests.test_memory -v`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/test_view.py src/at_runtime/view.py src/at_runtime/cli.py
+git commit -m "feat: add memory tree view with short collapse"
+```
+
+---
+
+### Task 4: 人工操作 CLI（promote / archive / discard）
+
+**Files:**
+- Modify: `src/at_runtime/cli.py`
+- Test: `tests/test_view.py`（补一个 CLI 层冒烟由 Task 6 覆盖；本任务验证函数已由 Task 1 覆盖）
+
+**Interfaces:**
+- Consumes: `promote_memory` / `archive_memory` / `discard_memory`（Task 1）
+
+- [ ] **Step 1: 写失败测试（CLI 解析冒烟）**
+
+```python
+# tests/test_view.py 追加
+class CliMemoryTests(unittest.TestCase):
+    def test_cli_promote_accepts_uri_and_to(self):
+        from at_runtime.cli import main
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            write_memory_structured(root, "memory://session/A/short",
+                                    conclusion="note", source={"task": "T17"})
+            code = main([
+                "memory", "promote", "memory://session/A/short", "--to", "medium",
+            ])
+            self.assertEqual(code, 0)
+            self.assertTrue((root / ".agent/memory/medium/task-T17.md").exists())
+```
+
+注意：`main()` 使用 `Path.cwd()`，测试需 `os.chdir(root)`。在测试开头加：
+`import os`；`old = os.getcwd(); os.chdir(root)`，`finally: os.chdir(old)`。
+
+- [ ] **Step 2: 确认测试失败**
+
+Run: `E:\AT FLOW\.venv\Scripts\python.exe -m unittest tests.test_view -v`
+Expected: FAIL —— CLI 尚无 promote 子命令（argparse 报错）
+
+- [ ] **Step 3: 实现**
+
+`cli.py` 的 memory 子命令追加 promote / archive / discard：
+
+```python
     promote = memory_sub.add_parser("promote", help="promote memory entry")
     promote.add_argument("uri")
     promote.add_argument("--to", choices=["medium", "long"], default=None,
-                         help="move to another tier")
+                         help="move to another tier (migrates scope)")
     archive = memory_sub.add_parser("archive", help="archive memory entry")
     archive.add_argument("uri")
     discard = memory_sub.add_parser("discard", help="discard memory entry")
     discard.add_argument("uri")
 ```
 
-`main()` 内 `memory` 分支改为：
+`main()` 内 `memory` 分支追加：
 
 ```python
-    if args.command == "memory":
-        root = Path.cwd()
-        if args.memory_command == "inspect":
-            entries = read_memory(root, args.uri)
-            print(json.dumps(entries, ensure_ascii=False, indent=2))
-            return 0
-        if args.memory_command == "view":
-            print(render_memory_tree(root, include_all=args.all))
-            return 0
         if args.memory_command == "promote":
             result = promote_memory(root, args.uri, to_tier=args.to)
             print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -368,19 +680,23 @@ def render_memory_tree(root: Path, include_all: bool = False) -> str:
 ```
 
 `cli.py` 导入追加：
-`from at_runtime.memory import archive_memory, discard_memory, promote_memory, read_memory`
-`from at_runtime.view import render_memory_tree`
+`from at_runtime.memory import archive_memory, discard_memory, promote_memory`
 
 - [ ] **Step 4: 确认测试通过**
 
-Run: `E:\AT FLOW\.venv\Scripts\python.exe -m unittest tests.test_view tests.test_memory -v`
+Run: `E:\AT FLOW\.venv\Scripts\python.exe -m unittest tests.test_view -v`
 Expected: PASS
 
-- [ ] **Step 5: 记录变更（不 commit，最后统一提交）**
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/test_view.py src/at_runtime/cli.py
+git commit -m "feat: wire memory promote/archive/discard CLI"
+```
 
 ---
 
-### Task 3: 生命线（checkpoint / timeline / rollback）
+### Task 5: 生命线（checkpoint / timeline / rollback）
 
 **Files:**
 - Create: `src/at_runtime/timeline.py`
@@ -396,9 +712,8 @@ Expected: PASS
   - `rollback_memory(root, node_id: str) -> dict`
 
 规则：checkpoint 把 `.agent/memory/{short,medium,long}` 全量复制到
-`.agent/timeline/<ts>-<label>/memory/`，写 `meta.yaml`（id/label/created_at/
-各层条目数）；rollback 先自动打 `pre-rollback-<node>` 恢复点，再清空
-`.agent/memory` 各层并复制节点快照回来。
+`.agent/timeline/<ts>-<label>/memory/`，写 `meta.yaml`；rollback 先自动打
+`pre-rollback-<node>` 恢复点，再清空各层并复制节点快照回来。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -413,7 +728,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from at_runtime.memory import read_memory, write_memory
+from at_runtime.memory import read_memory, write_memory_structured
 from at_runtime.timeline import create_checkpoint, list_checkpoints, rollback_memory
 from at_runtime.workspace import initialize_workspace
 
@@ -423,8 +738,8 @@ class TimelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialize_workspace(root)
-            write_memory(root, "memory://session/A/short", "note",
-                         source={"session": "A"})
+            write_memory_structured(root, "memory://session/A/short",
+                                    conclusion="note")
             node = create_checkpoint(root, "fix beam stability")
             self.assertTrue(node["id"].endswith("fix-beam-stability"))
             checkpoints = list_checkpoints(root)
@@ -435,11 +750,11 @@ class TimelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             initialize_workspace(root)
-            write_memory(root, "memory://session/A/short", "original",
-                         source={"session": "A"})
+            write_memory_structured(root, "memory://session/A/short",
+                                    conclusion="original")
             node = create_checkpoint(root, "before-change")
-            write_memory(root, "memory://session/A/short", "changed",
-                         source={"session": "A"})
+            write_memory_structured(root, "memory://session/A/short",
+                                    conclusion="changed")
             rollback_memory(root, node["id"])
             entries = read_memory(root, "memory://session/A/short")
             self.assertEqual(entries[-1]["content"], "original")
@@ -532,7 +847,7 @@ def rollback_memory(root: Path, node_id: str) -> dict[str, Any]:
     return {"node": node_id, "rolled_back": True}
 ```
 
-`cli.py` 追加三个子命令与分支（沿用 Task 2 的 memory 子命令结构）：
+`cli.py` 追加三个子命令与分支（沿用 memory 子命令结构）：
 
 ```python
     checkpoint = memory_sub.add_parser("checkpoint", help="create memory checkpoint")
@@ -567,23 +882,28 @@ def rollback_memory(root: Path, node_id: str) -> dict[str, Any]:
 Run: `E:\AT FLOW\.venv\Scripts\python.exe -m unittest tests.test_timeline -v`
 Expected: PASS（2 个用例）
 
-- [ ] **Step 5: 记录变更（不 commit，最后统一提交）**
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/test_timeline.py src/at_runtime/timeline.py src/at_runtime/cli.py
+git commit -m "feat: add memory timeline with checkpoint and rollback"
+```
 
 ---
 
-### Task 4: checkpoint skill（触发词触发）
+### Task 6: checkpoint skill（触发词触发）
 
 **Files:**
 - Create: `C:\Users\kk\.codex\skills\at-memory-checkpoint\SKILL.md`
 - Create: `C:\Users\kk\.codex\skills\at-memory-checkpoint\agents\openai.yaml`
 
 **前置：** 写权限——`C:\Users\kk\.codex\skills` 不在工作区写权限内，创建前需要
-用户批准一次写权限。
+用户批准一次写权限（已获用户同意）。
 
 - [ ] **Step 1: 初始化 skill**
 
 Run:
-`python "C:\Users\kk\.codex\skills\.system\skill-creator\scripts\init_skill.py" at-memory-checkpoint --path "C:\Users\kk\.codex\skills" --interface display_name="AT Memory Checkpoint" --interface short_description="Trigger-word checkpoint for AT three-tier memory timeline" --interface default_prompt="打点"`
+`python "C:\Users\kk\.codex\skills\.system\skill-creator\scripts\init_skill.py" at-memory-checkpoint --path "C:\Users\kk\.codex\skills" --interface display_name="AT Memory Checkpoint" --interface short_description="Trigger-word checkpoint for AT memory timeline" --interface default_prompt="打点"`
 
 Expected: 生成 skill 目录与 SKILL.md 模板
 
@@ -592,7 +912,7 @@ Expected: 生成 skill 目录与 SKILL.md 模板
 ```markdown
 ---
 name: at-memory-checkpoint
-description: Record an AT runtime memory timeline checkpoint. Use when the user says "打点", "记录时间节点", "存个档", "checkpoint", or otherwise asks to save a development milestone / time node in the AT three-tier memory. Triggers `at memory checkpoint`.
+description: Record an AT memory timeline checkpoint. Use when the user says "打点", "记录时间节点", "存个档", "checkpoint", or otherwise asks to save a development milestone / time node in the AT three-tier memory. Triggers `at memory checkpoint`.
 ---
 
 Run the AT CLI from the project root:
@@ -619,53 +939,60 @@ Run: `E:\AT FLOW\.venv\Scripts\at.exe memory checkpoint "manual-trigger"`
 Expected: 生成 `timeline/<ts>-manual-trigger/` 与 meta.yaml；随后
 `at memory timeline` 能列出该节点。
 
-- [ ] **Step 5: 记录变更（不 commit，最后统一提交）**
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat: add at-memory-checkpoint skill"
+```
 
 ---
 
-### Task 5: 文档与全量验证
+### Task 7: 文档与全量验证
 
 **Files:**
 - Modify: `README.md`（快速开始补 `at memory` 命令族）
-- Modify: `AGENTS.md`（补 memory 命令映射与触发词）
+- Modify: `AGENTS.md`（补 memory 命令映射与写入约定）
 
 - [ ] **Step 1: 更新 README 快速开始**
 
 在快速开始段落追加：
 
 ```powershell
-# 查看三层记忆树 / 人工操作 / 生命线
+# 写入 / 查看 / 操作三层记忆与生命线
+.venv\Scripts\at memory write memory://session/analysis-T17-01/short --conclusion "..." --task T17
 .venv\Scripts\at memory view
-.venv\Scripts\at memory promote memory://task/T17/medium
+.venv\Scripts\at memory promote memory://session/analysis-T17-01/short --to medium
 .venv\Scripts\at memory checkpoint "fix beam stability"
 .venv\Scripts\at memory timeline
 ```
 
-- [ ] **Step 2: 更新 AGENTS.md 命令映射**
+- [ ] **Step 2: 更新 AGENTS.md**
 
-`## Command Mapping (v2)` 追加：
+`## Command Mapping (v2)` 追加 memory 命令族（write / view / promote /
+archive / discard / checkpoint / timeline / rollback），并在触发规则说明：
 
-- `AT: memory view` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" memory view`
-- `AT: memory promote, <memory-uri>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory promote <memory-uri>`
-- `AT: memory checkpoint, <label>` ->
-  `python "E:\AT FLOW\.venv\Scripts\at.exe" memory checkpoint <label>`
-- `AT: memory timeline` -> `python "E:\AT FLOW\.venv\Scripts\at.exe" memory timeline`
-
-并在触发规则说明：用户说"打点 / 记录时间节点 / 存个档"时，调用
-`at-memory-checkpoint` skill 执行 checkpoint。
+- 用户说"打点 / 记录时间节点 / 存个档"时，调用 `at-memory-checkpoint` skill
+- 阶段完成时，Codex 应按约定调用 `at memory write` 沉淀结论/约束/未决问题
+  （结构化三字段）
 
 - [ ] **Step 3: 全量测试**
 
 Run: `E:\AT FLOW\.venv\Scripts\python.exe -m unittest discover -s tests`
-Expected: 全部通过（原 24 + 新增 9 = 33 个）
+Expected: 全部通过（原 24 + 新增 18 = 42 个）
 
 - [ ] **Step 4: 真实冒烟**
 
-在临时目录：`at init` → `at memory view` → 写 memory → `at memory checkpoint`
-→ `at memory timeline` → `at memory rollback`，确认命令族端到端可用。
+在临时目录：`at init` → `at memory write`（三字段）→ `at memory view` →
+`at memory promote --to medium`（验证 scope 迁移）→ `at memory checkpoint` →
+`at memory timeline` → `at memory rollback`，确认命令族端到端可用。
 
-- [ ] **Step 5: 汇总记录（不 commit，最后统一提交）**
+- [ ] **Step 5: Commit**
+
+```bash
+git add README.md AGENTS.md
+git commit -m "docs: add memory command family to README and AGENTS"
+```
 
 ---
 

@@ -1,103 +1,105 @@
-# AT v2 Context Runtime Design（整合版 2026-08-08）
+# AT v2 Context Runtime Design（记忆层版 2026-08-08）
 
 ## Goal
 
-AT v2 是**个人辅助开发工具流中的记忆层**。它不替代 Codex、不重复实现
-workflow/knowledge/execution，只负责一件事：
+AT v2 是**个人辅助开发工具流中的记忆层**：管理三层记忆（short / medium /
+long）的可见性、人工操作与生命周期。**不编排 agent、不重复实现
+workflow / knowledge / execution**——这些全部复用开源技术。
 
-> **让人（和 Agent）清楚地看到当前记住了什么，并能在需要时查看、提升、回滚。**
+核心问题只有一个：
 
-核心交付物是三层记忆的**可见性与人工操作**：Markdown 落盘（目录即视图）、
-树视图、promote/archive/discard、生命线（checkpoint/timeline/rollback）。
-上下文隔离是让记忆产生与流动的支撑机制，不是交付物。
+> 让人（和 Agent）清楚地看到当前记住了什么，并能在需要时查看、写入、提升、回滚。
+
+## 定位边界（v2 收敛后的重要修正）
+
+### AT 做（核心交付）
+
+- 三层记忆存储 + 状态机
+- 结构化写入接口（结论 / 约束 / 未解决问题三字段）
+- 树视图（三层全貌）
+- 人工操作（promote / archive / discard）
+- 生命线（checkpoint / timeline / rollback）
+- 审计事件（写入 / 操作 / 打点 / 回滚）
+
+### AT 不做（V0.1 机制验证件，代码保留但移出核心、不再扩展）
+
+- agent 角色编排（analysis / code / test 流水线）——交给 Superpowers
+- 上下文隔离机制（Context Router / Policy 权限矩阵 / Handoff 链条）——
+  是 v2.0 验证隔离用的机制，不是记忆层的交付物
+- Session Registry / runner / eval——V0.1 验证件
+
+### 复用层（适配不实现）
+
+- Workflow → **Superpowers**（已装 6.2.0）
+- Knowledge → **CodeAlmanac**（macOS-only 需验证）/ **openwiki**（备选）
+- Execution → **Codex CLI**
 
 ## 价值主张
 
 长任务下模型上下文"装得下但不划算"：token 线性膨胀、每步变慢、早期信息
-注意力衰减。AT 分段让**每段上下文保持恒定小区间**，段间用 handoff 传递结论；
-同时把"系统记住了什么"完全透明给人工，由人做记忆提升与清理决策。
+注意力衰减。AT 把开发过程中的结论、约束、未决问题结构化沉淀为三层记忆，
+让人（和后续会话）随时看到"系统记住了什么"；提升与清理由人决策。
 
-## 版本路线（v2 系列）
-
-```text
-v2.0  机制验证（已交付）：8 模块最小可用 + 三 session 隔离 + 最小 eval
-v2.1  记忆 MVP（当前目标）：三层记忆 + 树视图 + 人工操作 + 生命线 + skill 触发
-v2.2  复用 Superpowers：workflow 适配层（怎么做）
-v2.3  复用 Knowledge：OpenWiki / CodeAlmanac 适配层（项目已知什么）
-v2.4  并行执行：tmux + git worktree（在哪运行）
-```
-
-MVP 门槛是 **v2.1**：记忆核心交付完成、可日常使用。v2.2 起全部是"复用
-开源技术的适配层"，不是自研。
-
-## 四层解耦（AT 角色收缩）
+## 版本路线
 
 ```text
-Superpowers → 怎么做（workflow）            ← 复用，不实现
-AT Runtime  → 记住什么（三层记忆 + 生命线）★ 核心交付
-Execution   → 在哪里运行（Codex CLI）        ← 复用，不实现
-Knowledge   → 项目已知什么（OpenWiki/CodeAlmanac）← 复用，不实现
+v2.0  机制验证（已交付）：隔离与编排机制的可行性验证件
+v2.1  记忆层 MVP（当前目标）：三层记忆 + 结构化写入 + 树视图 + 人工操作
+      + 生命线 + skill 触发
+v2.2  复用 Superpowers（workflow 适配）
+v2.3  复用 Knowledge（OpenWiki / CodeAlmanac 适配）
+v2.4  并行执行（tmux + git worktree）
 ```
 
-稳定的是协议对象：**Memory、Scope、Status、Timeline**；其余（workflow /
-knowledge / execution）都是可替换 Adapter。
+MVP 门槛 = v2.1：记忆核心交付完成、可日常使用。v2.2 起全部是复用适配层。
 
 ## 核心设计原则
 
 1. **记忆可见**：记忆是给人看的，Markdown 实时落盘，目录即视图。
-2. **记忆有 Scope**：任何记忆都有归属（session/task/feature/project/role）。
+2. **记忆有 Scope**：任何记忆都有归属（session / task / feature / project /
+   role），scope 是归类维度，不是权限单元。
 3. **记忆流动靠人**：promotion / 清理是人工决策，不做自动 GC 与自动提炼。
 4. **生命周期可回滚**：生命线节点全量快照，随时查看、可回滚（回滚前自动
    打恢复点）。
-5. **其他全部复用**：workflow/knowledge/execution 一律复用开源，不自研。
+5. **其他全部复用**：workflow / knowledge / execution 一律复用开源，不自研。
 
 ## 模块分层
 
 ### 核心（自研交付）
 
-| 模块 | 职责 |
-|---|---|
-| Memory Manager | 三层存储（Markdown 落盘）、Memory URI、状态机 |
-| Memory View | 树视图：三层全貌、scope 分组、状态/来源/时间 |
-| Memory Lifecycle | 人工操作：promote / archive / discard |
-| Timeline | 生命线：checkpoint（快照）/ timeline（列表）/ rollback（恢复） |
-| Observer | 记忆读写与操作审计事件（JSONL + 时间戳） |
-| CLI | `at memory` 命令族 |
+| 模块 | 职责 | 载体 |
+|---|---|---|
+| Memory Manager | 三层存储、Memory URI、状态机操作 | `memory.py` |
+| Memory Write | 结构化写入（结论/约束/未解决三字段） | `memory.py` + CLI |
+| Memory View | 树视图（short 折叠、medium/long 全显） | `view.py` |
+| Memory Lifecycle | 人工操作：promote（跨层跨 scope）/ archive / discard | `memory.py` |
+| Timeline | 生命线：checkpoint / timeline / rollback | `timeline.py` |
+| Observer | 记忆操作审计事件（JSONL + 时间戳） | `observer.py` |
+| CLI | `at memory` 命令族 | `cli.py` |
 
-### 支撑（最小脚手架，不扩展）
+### V0.1 验证件（保留代码，移出核心，不再扩展）
 
-| 模块 | 职责 |
-|---|---|
-| Session Registry | 记录谁在做什么任务 |
-| Context Router / Assembler | 组装 Context Bundle（服务记忆注入） |
-| Policy Engine | role read/write 白名单（读侧过滤已接线） |
-| Handoff Manager | 段间结论传递（结构化 handoff） |
+`registry.py`、`context.py`、`policy.py`、`handoff.py`、`runner.py`、
+`eval.py`、`execution.py`（LocalAdapter）——v2.0 验证隔离与编排机制的
+产物，代码保留供参考，不属于 v2.1 交付范围。
 
-### 复用层（适配不实现）
+### 复用层
 
-- Workflow → **Superpowers**（本机已装 6.2.0，V0.2 接入无风险）
-- Knowledge → **CodeAlmanac**（首选，macOS-only 需验证）/ **openwiki**（备选）
-- Execution → **Codex CLI**（LocalAdapter 已实现；并行执行 V0.4 自建
-  tmux+worktree，不依赖 TUI 型三方工具）
+- Workflow → Superpowers
+- Knowledge → CodeAlmanac / openwiki
+- Execution → Codex CLI
 
 ## 数据模型
 
-### Memory URI
+### Memory URI 与三层
 
 ```text
-memory://session/<id>/short
-memory://task/<id>/medium
+memory://session/<id>/short     # 单会话草稿，任务结束人工清理
+memory://task/<id>/medium       # 任务级，跨会话共享
 memory://feature/<name>/medium
-memory://project/<name>/long
+memory://project/<name>/long    # 项目级，人工 promote 后进入
 memory://role/<role>/long
 ```
-
-### 三层定义
-
-- **Short**：单 Session/Stage，高频变化，任务结束由人工清理。
-- **Medium**：Task/Feature 周期，保存 root cause、约束、失败尝试、决策；
-  最重要的一层。
-- **Long**：跨任务、稳定、已验证、项目级；必须经过人工 promote。
 
 ### 状态机（人工驱动）
 
@@ -108,69 +110,92 @@ candidate ──promote──▶ active ──promote──▶ verified
                 archive（任意状态可归档）
 ```
 
+promote 规则：
+
+- 同层：`candidate → active → verified`，verified 到顶
+- 跨层（`--to`）：**同时迁移 scope**——`session → task`（用写入方提供的
+  task 归属）、`task → project`（用 task 的 project 归属）；来源 verified
+  且目标 long 时保持 verified
+
+### 结构化写入（三字段）
+
+```text
+at memory write <uri> \
+  --conclusion "beam < 2 意味着 stability 判定被跳过" \
+  --constraint "保持 scoring API schema 不变" \
+  --unresolved "阈值是否应改为配置项，待确认"
+```
+
+- 三字段允许部分缺失（缺的字段写空数组）
+- 全部缺失时报错，不落盘
+- 写入后 status=candidate，记录审计事件
+
 ### 存储格式
 
-- 记忆正文：Markdown，`.agent/memory/<tier>/<scope>-<name>.md`，追加式，
-  YAML 多文档流保存元数据（content/source/status/created_at 保真）。
-- 生命线：`.agent/timeline/<ts>-<label>/`，含 `meta.yaml`（时间/标签/来源）
-  与三层全量快照 Markdown。
-- 事件：`.agent/runtime/events/events.jsonl`，行级 JSON + 时间戳。
+```text
+.agent/memory/<tier>/<scope>-<name>.md     # Markdown 追加式，
+                                           # YAML 多文档流保真元数据
+.agent/timeline/<ts>-<label>/              # 生命线节点
+    ├── meta.yaml                          # id / label / created_at / 各层条目数
+    └── memory/{short,medium,long}/        # 三层全量快照
+.agent/runtime/events/events.jsonl         # 审计事件
+```
 
 ## CLI 边界
 
 ```text
-at memory view [--all]              # 树视图（默认活跃，--all 全状态）
-at memory promote <uri> [--to]      # 人工提升（可跨层）
-at memory archive <uri>             # 归档
-at memory discard <uri>             # 废弃
-at memory checkpoint <label>        # 打生命线节点（全量快照）
-at memory timeline                  # 查看时间线
-at memory rollback <node>           # 回滚（自动先打恢复点）
+at memory write <uri> --conclusion ... [--constraint ...] [--unresolved ...]
+at memory get <uri>                    # 结构化读取（供 Agent 调用）
+at memory view [--all]
+at memory promote <uri> [--to medium|long]
+at memory archive <uri>
+at memory discard <uri>
+at memory checkpoint <label>
+at memory timeline
+at memory rollback <node>
 
-at init / at task run / at eval / at doctor   # 支撑命令
+at doctor   # 健康检查（支撑）
 ```
 
-正常使用中用户不直接敲命令——Codex 通过 AGENTS.md / Skills 调用（例如
-checkpoint skill 用触发词触发 `at memory checkpoint`）。
+## 触发机制（外部驱动）
 
-## Skill 触发（时间节点）
+AT 不做编排，因此写入与打点全部由外部触发：
 
-- 位置：`C:\Users\kk\.codex\skills`（全局自动发现）
-- 触发词：对话中出现"打点 / 记录时间节点 / 存个档 / checkpoint"等意图时，
-  Codex 运行 `at memory checkpoint <label>`
-- 生命周期：每次开发的关键时间节点（阶段完成、重大决策、发现/修复）由人
-  触发记录，形成可查看、可回滚的开发时间线
+- **写入**：Codex / Superpowers / 人工在阶段完成时调用
+  `at memory write`（AGENTS.md 约定，无需 skill）
+- **读取**：后续 Codex 会话按需调用 `at memory get <uri>` 获取结构化记忆
+- **打点**：`at-memory-checkpoint` skill 用触发词（"打点 / 记录时间节点 /
+  存个档 / checkpoint"）调用 `at memory checkpoint <label>`
 
 ## 验证门（v2.1）
 
-1. `at memory view` 树视图正确展示三层、scope、状态、来源、时间
-2. memory 写读往返保真（多行 content、嵌套 source）
-3. promote / archive / discard 状态流转正确且落盘
-4. checkpoint 生成全量快照；timeline 列出节点；rollback 恢复并先打恢复点
-5. checkpoint skill 触发词可触发打点
-6. 全量单元测试 + `at doctor` 通过
+1. `at memory write` 三字段正确落盘，部分缺失允许、全缺失拒绝
+2. `at memory get` 结构化读取与写入一致（Agent 读取入口可用）
+3. `at memory view` 树视图正确展示（short 折叠、medium/long 全显）
+4. promote / archive / discard 状态流转正确；跨层 promote 同时迁移 scope
+5. checkpoint 生成全量快照；timeline 列出节点；rollback 恢复并先打恢复点
+6. checkpoint skill 触发词可触发打点
+7. 写 / 操作 / 打点 / 回滚均记录审计事件（memory.write / promoted /
+   archived / discarded / checkpoint / rollback）
+8. 全量单元测试 + `at doctor` 通过
 
 ## 风险与务实决策
 
-1. **隔离是 API/命名空间级（软隔离）**：执行层 agent 与 runtime 共享文件
-   系统；读侧 Policy 过滤已强制，写侧 `can_write` 待接线；执行 sandbox
-   限制（`.agent/` 只读/不可见）作为 v2.1 的信任模型决策点。
-2. **relevance 显式引用**：Context Router 不做 LLM 检索，relevance = 显式
-   声明 + 静态 Policy + 默认最小集；检索留待复用层。
-3. **进程级隔离**：每 session 一个新 Codex 进程，无会话连续性。
-4. **最小对比 eval**：baseline 单会话 vs AT 三 session，对比成功/token/
-   handoff 充分性；完整 Benchmark 不做。
-5. **不做**：自动 GC、自动提升、自动摘要、Web 面板、语言翻译链路。
+1. **记忆质量依赖写入方**：agent / 人工负责提供结构化内容，噪音控制靠
+   AGENTS.md 约定与审计事件（`memory.write` 记录写入方与内容长度）。
+2. **不做自动机制**：自动 GC、自动提升、自动摘要、Web 面板。
+3. **无 DB / Web / 网络依赖**；PyYAML 唯一新增依赖。
+4. **V0.1 验证件的边界如实标注**：隔离 / 编排机制已实现但移出核心，不承诺
+   作为 AT 能力；如需重新启用，按 v2.2+ 的复用层评估。
 
 ## 技术栈与存储
 
-- Python 3.10+；PyYAML 唯一新增依赖。
+- Python 3.10+；PyYAML。
 - 文件系统存储：Markdown（记忆正文/快照）、YAML（元数据/策略）、JSON（事件）。
-- 无数据库、无 Web 框架、无网络依赖（Codex provider 通过现有 CLI 进程调用）。
 - v2 本地存放 `.agent/` 与 v1 的 `.at/` 完全隔离，均 gitignored。
 
-## 与 v1 的关系
+## 与 v1 / v2.0 的关系
 
-- `v2.0` 分支仓库内重写，v1 实现完整保留在 git 历史。
-- 复用 v1 经验但不迁移代码：不做语言翻译、不做 Web/云、不做重型状态机。
-- v1 教训：编排成本大于产出；v2 只保留"记忆"这一有确定性价值的部分。
+- v1：多 Agent 编排平台，实战效果差（编排成本大于产出）。
+- v2.0：隔离与编排机制验证（已交付，代码保留为验证件）。
+- v2.1：收敛为记忆层，只保留"记忆"这一有确定性价值的核心，其余复用开源。
