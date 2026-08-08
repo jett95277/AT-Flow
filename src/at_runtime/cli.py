@@ -7,7 +7,13 @@ from pathlib import Path
 from at_runtime.context import build_context
 from at_runtime.eval import run_minimal_eval
 from at_runtime.handoff import get_handoff
-from at_runtime.memory import read_memory, write_memory_structured
+from at_runtime.memory import (
+    archive_memory,
+    discard_memory,
+    promote_memory,
+    read_memory,
+    write_memory_structured,
+)
 from at_runtime.runner import run_doctor, run_task_flow
 from at_runtime.view import render_memory_tree
 from at_runtime.workspace import initialize_workspace
@@ -35,6 +41,14 @@ def main(argv: list[str] | None = None) -> int:
     view = memory_sub.add_parser("view", help="show memory tree")
     view.add_argument("--all", action="store_true",
                       help="include archived/deprecated and expand short")
+    promote = memory_sub.add_parser("promote", help="promote memory entry")
+    promote.add_argument("uri")
+    promote.add_argument("--to", choices=["medium", "long"], default=None,
+                         help="move to another tier (migrates scope)")
+    archive = memory_sub.add_parser("archive", help="archive memory entry")
+    archive.add_argument("uri")
+    discard = memory_sub.add_parser("discard", help="discard memory entry")
+    discard.add_argument("uri")
     context_parser = subparsers.add_parser("context", help="inspect context")
     context_sub = context_parser.add_subparsers(dest="context_command", required=True)
     context_inspect = context_sub.add_parser("inspect", help="build and show context bundle")
@@ -93,6 +107,18 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.memory_command == "view":
             print(render_memory_tree(root, include_all=args.all))
+            return 0
+        if args.memory_command == "promote":
+            result = promote_memory(root, args.uri, to_tier=args.to)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.memory_command == "archive":
+            result = archive_memory(root, args.uri)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.memory_command == "discard":
+            result = discard_memory(root, args.uri)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
     if args.command == "context":
         if args.context_command == "inspect":

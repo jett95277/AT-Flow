@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sys
 import tempfile
 import unittest
@@ -50,6 +51,26 @@ class ViewTests(unittest.TestCase):
             archive_memory(root, "memory://task/T17/medium")
             self.assertNotIn("hidden", render_memory_tree(root))
             self.assertIn("hidden", render_memory_tree(root, include_all=True))
+
+
+class CliMemoryTests(unittest.TestCase):
+    def test_cli_promote_accepts_uri_and_to(self):
+        from at_runtime.cli import main
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            write_memory_structured(
+                root, "memory://session/A/short", conclusion="note", source={"task": "T17"}
+            )
+            old = os.getcwd()
+            os.chdir(root)
+            try:
+                code = main(["memory", "promote", "memory://session/A/short", "--to", "medium"])
+            finally:
+                os.chdir(old)
+            self.assertEqual(code, 0)
+            self.assertTrue((root / ".agent/memory/medium/task-T17.md").exists())
 
 
 if __name__ == "__main__":
