@@ -41,9 +41,9 @@
 
 规则：同层 promote 按 `candidate→active→verified` 升级；`--to` 跨层时
 **迁移 scope 与 tier**——目标 scope 从条目 `source.task`（→medium）或
-`source.project`（→long）推导，缺失则抛 `ValueError`；来源 `verified` 且
-目标 long 时保持 `verified`，否则置 `active`。archive/discard 对文件内全部
-条目统一置状态。
+`source.project`（→long）推导，缺失则抛 `ValueError`；跨层到 long 一律置
+`verified`（人工 promote 到 long 本身就是验证动作），跨层到 medium 置
+`active`。archive/discard 对文件内全部条目统一置状态。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -203,11 +203,7 @@ def promote_memory(root: Path, uri: str, to_tier: str | None = None) -> dict[str
             raise ValueError(f"unknown tier: {to_tier}")
         new_uri = _cross_tier_target(entries[-1], uri, to_tier)
         for entry in entries:
-            entry["status"] = (
-                "verified"
-                if entry["status"] == "verified" and to_tier == "long"
-                else "active"
-            )
+            entry["status"] = "verified" if to_tier == "long" else "active"
         new_path = memory_path(root, new_uri)
         new_path.parent.mkdir(parents=True, exist_ok=True)
         if new_path.exists():

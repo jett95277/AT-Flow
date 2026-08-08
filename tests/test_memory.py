@@ -7,7 +7,15 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from at_runtime.memory import memory_path, write_memory, read_memory
+from at_runtime.memory import (
+    archive_memory,
+    discard_memory,
+    list_tier_entries,
+    memory_path,
+    promote_memory,
+    read_memory,
+    write_memory,
+)
 from at_runtime.workspace import initialize_workspace
 
 
@@ -74,6 +82,89 @@ class MemoryTests(unittest.TestCase):
                 memory_path(root, "memory://session/A B/short")
             with self.assertRaises(ValueError):
                 memory_path(root, "memory://session/A@evil/short")
+
+
+class MemoryLifecycleTests(unittest.TestCase):
+    def _write(self, root, uri, content="finding", source=None, **kw):
+        write_memory(root, uri, content, source=source or {"session": "s1"}, **kw)
+
+    def test_promote_same_tier_moves_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            self._write(root, "memory://task/T17/medium")
+            self.assertEqual(
+                promote_memory(root, "memory://task/T17/medium")["status"], "active"
+            )
+            self.assertEqual(
+                promote_memory(root, "memory://task/T17/medium")["status"], "verified"
+            )
+            with self.assertRaises(ValueError):
+                promote_memory(root, "memory://task/T17/medium")
+
+    def test_promote_cross_tier_migrates_scope_session_to_task(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            self._write(root, "memory://session/A/short", source={"task": "T17"})
+            result = promote_memory(root, "memory://session/A/short", to_tier="medium")
+            self.assertEqual(result["status"], "active")
+            self.assertTrue((root / ".agent/memory/medium/task-T17.md").exists())
+            self.assertFalse((root / ".agent/memory/short/session-A.md").exists())
+
+    def test_promote_cross_tier_task_to_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            self._write(root, "memory://task/T17/medium", source={"project": "ASR"})
+            promote_memory(root, "memory://task/T17/medium")
+            result = promote_memory(root, "memory://task/T17/medium", to_tier="long")
+            self.assertEqual(result["status"], "verified")
+            self.assertTrue((root / ".agent/memory/long/project-ASR.md").exists())
+
+    def test_promote_cross_tier_requires_scope_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            self._write(root, "memory://session/A/short", source={})
+            with self.assertRaises(ValueError):
+                promote_memory(root, "memory://session/A/short", to_tier="medium")
+
+    def test_archive_and_discard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            self._write(root, "memory://session/A/short")
+            self.assertEqual(
+                archive_memory(root, "memory://session/A/short")["status"], "archived"
+            )
+            self.assertEqual(
+                discard_memory(root, "memory://session/A/short")["status"], "deprecated"
+            )
+
+    def test_list_tier_entries_excludes_inactive_by_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            self._write(root, "memory://session/A/short", status="candidate")
+            self._write(root, "memory://session/B/short", status="archived")
+            entries = list_tier_entries(root, "short")
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["uri"], "memory://session/A/short")
+            self.assertEqual(len(list_tier_entries(root, "short", include_all=True)), 2)
+
+    def test_lifecycle_records_audit_events(self):
+        from at_runtime.observer import list_events
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            self._write(root, "memory://session/A/short", source={"task": "T17"})
+            promote_memory(root, "memory://session/A/short", to_tier="medium")
+            archive_memory(root, "memory://task/T17/medium")
+            events = [e["event"] for e in list_events(root)]
+            self.assertIn("memory.promoted", events)
+            self.assertIn("memory.archived", events)
 
 
 if __name__ == "__main__":
