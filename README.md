@@ -91,11 +91,11 @@ project/
 ## 版本路线
 
 ```text
-V0.1   Codex + AT Runtime 核心（三 session 隔离 + 最小对比 eval）—— 当前
-V0.2   接入 Superpowers（Workflow Stage → Context Policy）
-V0.3   接入 OpenWiki（Knowledge Bridge）
-V0.4   接入 Claude Squad / dmux + Git Worktree（并行执行）
-V0.5   Benchmark（对比单长会话 / 全量共享 / AT 隔离）
+v2.0   机制验证（已交付）：8 模块 + 三 session 隔离 + 最小 eval
+v2.1   记忆 MVP（当前目标）：三层记忆 + 树视图 + 人工操作 + 生命线 + skill
+v2.2   复用 Superpowers（workflow 适配）
+v2.3   复用 Knowledge（OpenWiki / CodeAlmanac 适配）
+v2.4   并行执行（tmux + git worktree）
 ```
 
 ## 快速开始（V0.1）
@@ -126,7 +126,8 @@ python -m venv .venv
 实现计划见
 `docs/superpowers/plans/2026-08-08-at-v2-context-runtime-mvp-implementation-plan.md`，
 架构设计见
-`docs/superpowers/specs/2026-08-08-at-v2-context-runtime-design.md`。
+`docs/superpowers/specs/2026-08-08-at-v2-context-runtime-design.md`，
+结构大框架与当前能力见 `docs/architecture-v2.md`。
 
 ## 与 v1 的关系
 

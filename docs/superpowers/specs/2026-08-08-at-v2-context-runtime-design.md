@@ -1,313 +1,176 @@
-# AT v2.0 Context Runtime Design
+# AT v2 Context Runtime Design（整合版 2026-08-08）
 
 ## Goal
 
-v2.0 把 AT 从"多 Agent 编排平台"重构为**面向长任务与并行 Coding Agent 的
-上下文隔离运行时**（Context & Memory Control Plane）。核心问题只有一个：
+AT v2 是**个人辅助开发工具流中的记忆层**。它不替代 Codex、不重复实现
+workflow/knowledge/execution，只负责一件事：
 
-> 当前 Agent 在当前任务阶段，应该看到什么，不应该看到什么。
+> **让人（和 Agent）清楚地看到当前记住了什么，并能在需要时查看、提升、回滚。**
 
-v2.0 不负责写代码、分析 Bug、选择工程方法、管理 Wiki 或 Worktree；
-它只负责：**Context、Memory、Scope、Isolation、Handoff、Session、Provenance、
-Budget**。
+核心交付物是三层记忆的**可见性与人工操作**：Markdown 落盘（目录即视图）、
+树视图、promote/archive/discard、生命线（checkpoint/timeline/rollback）。
+上下文隔离是让记忆产生与流动的支撑机制，不是交付物。
 
-## 版本边界
+## 价值主张
 
-v2.0 MVP（V0.1）拥有：
+长任务下模型上下文"装得下但不划算"：token 线性膨胀、每步变慢、早期信息
+注意力衰减。AT 分段让**每段上下文保持恒定小区间**，段间用 handoff 传递结论；
+同时把"系统记住了什么"完全透明给人工，由人做记忆提升与清理决策。
 
-- 8 个核心模块的最小可用实现（Session Registry、Context Router、
-  Context Assembler、Memory Manager、Policy Engine、Handoff Manager、
-  Knowledge Bridge、Runtime Observer）。
-- 三层记忆（Short / Medium / Long）+ Scope（Global/Project/Role/Feature/Task/
-  Session）+ Promotion 管线 + Provenance。
-- Structured Handoff（Agent 只通过 Handoff/Artifact 交换，不共享 Conversation）。
-- Context Bundle（结构化上下文包，含 token budget）。
-- ExecutionAdapter / KnowledgeAdapter 接口（V0.1 只实现 LocalAdapter，
-  ClaudeSquad/dmux/OpenWiki 预留）。
-- CLI（`at` 命令族），供 Codex 通过 AGENTS.md/Skills 调用。
-- Python 3 + 文件系统存储（YAML/JSON/Markdown，`.agent/` 目录），不引入数据库。
-
-v2.0 MVP 不拥有：
-
-- Web Console / 云部署（v1 的 web/、deploy/ 不迁移）。
-- Superpowers 深度集成（V0.2）、OpenWiki（V0.3）、Claude Squad/dmux（V0.4）、
-  Benchmark（V0.5）——只预留接口。
-- 多 Agent 并行执行（V0.1 是串行三 session 验证隔离）。
-- 语言中英翻译链路（v1 的语言契约不再迁移）。
-
-## 四层解耦
+## 版本路线（v2 系列）
 
 ```text
-Superpowers    → 怎么做（workflow）
-AT Runtime     → 知道什么（context/memory control plane）
-Execution      → 在哪里 / 怎么同时运行（Local / Claude Squad / dmux）
-OpenWiki       → 项目已经知道什么（knowledge）
+v2.0  机制验证（已交付）：8 模块最小可用 + 三 session 隔离 + 最小 eval
+v2.1  记忆 MVP（当前目标）：三层记忆 + 树视图 + 人工操作 + 生命线 + skill 触发
+v2.2  复用 Superpowers：workflow 适配层（怎么做）
+v2.3  复用 Knowledge：OpenWiki / CodeAlmanac 适配层（项目已知什么）
+v2.4  并行执行：tmux + git worktree（在哪运行）
 ```
 
-Codex、Superpowers、OpenWiki、Claude Squad 都是可替换 Adapter；稳定的是协议
-对象：**Task、Context、Memory、Scope、Handoff、Artifact、Session**。
+MVP 门槛是 **v2.1**：记忆核心交付完成、可日常使用。v2.2 起全部是"复用
+开源技术的适配层"，不是自研。
 
-## Adapter 选型调研（2026-08-08 补充）
-
-### Knowledge 层：首选 CodeAlmanac，备选 openwiki
-
-调研结论（V0.3 前需要落地验证）：
-
-- **CodeAlmanac**（langchain-ai/codealmanac）：搜索 / 展示 / 摄入三能力与
-  Knowledge Bridge 的 `query/get/propose` 一一对应，接口匹配度最高。
-- **硬伤：macOS-only**（依赖 `mdfind` Spotlight）。当前开发机与云服务器均为
-  Linux/Windows，V0.3 集成前必须先验证平台支持；若无法跨平台，则降级为备选。
-- **备选：langchain-ai/openwiki**：纯文件系统 + 向量索引，跨平台，但摄入与检索
-  语义是“文档库”而非“已验证知识”，需要额外的 status/promotion 映射。
-- V0.1 不依赖任何外部 Knowledge 实现，`local` provider 就是 `.agent/knowledge/refs/`
-  引用层，接口已按 `query/get/propose` 对齐，后续替换 Adapter 不破坏协议。
-
-### Execution 层：不依赖 TUI 型三方工具，V0.4 自建 tmux+worktree
-
-调研结论（V0.4 规划，V0.1 只做 LocalAdapter）：
-
-- **dmux / Claude Squad 均为交互式 TUI，无脚本化 API**：无法在非交互进程里稳定
-  spawn/collect，直接依赖会让 `at` CLI 变成“套壳终端”，违背可用性第一原则。
-- 倾向 V0.4 直接 spawn `tmux + git worktree`（借鉴两者的工作流模式：每 agent 独立
-  worktree + 独立会话），由 AT Runtime 自己管理生命周期与输出收集，不引入外部 UI。
-- V0.1 的进程级隔离（每 session 一个新 Codex 进程）已经验证同一前提：session 之间
-  无会话连续性，隔离是真实的。
-
-### Superpowers：已装，V0.2 接入无风险
-
-- 本机已安装 `openai-curated-remote/superpowers@6.2.0`，`executing-plans` /
-  `subagent-driven-development` 等技能可直接被 Agent 调用。
-- V0.1 的 CLI 设计（`at` 命令族）天然适配 Superpowers 的 workflow 层：AT 负责
-  context/memory/scope，Superpowers 负责“怎么做”，两层通过 Context Bundle 交互，
-  不需要额外适配代码。
-
-## 六条核心原则
-
-1. **Conversation is not Memory**：聊天历史不能直接成为长期记忆。
-2. **Memory is scoped**：任何记忆都有 Scope。
-3. **Context is constructed**：上下文每次动态构建，不直接继承。
-4. **Agents communicate through artifacts**：Agent 之间通过 Handoff/Artifact
-   通信，不复制完整 Conversation。
-5. **Knowledge must be promoted**：长期知识必须经过验证和晋升。
-6. **Everything is replaceable except the context protocol**。
-
-## 核心模块（V0.1 最小可用）
-
-### 1. Session Registry
-
-管理"谁正在执行什么任务，属于哪个 Context Scope"。字段：session_id、agent
-(provider/role)、task(id/stage)、scope(project/branch/context_scope/
-memory_scope)、parent、status。不保存完整 LLM 思维过程。
-
-### 2. Context Router
-
-最核心模块：根据 Agent/Task/Stage/Policy 决定"允许进入 Context Assembler 的
-信息"。它是 **Authorization + Relevance Boundary**，不是 Retrieval Engine。
-
-### 3. Context Assembler
-
-决定"最终实际给模型什么"：去重、排序、压缩、token budget、provenance，
-产出 Context Bundle。
-
-### 4. Memory Manager
-
-三层记忆 + Scope + 状态机（candidate/active/verified/deprecated/rejected）+
-Promotion + GC。
-
-### 5. Policy Engine
-
-静态可解释规则（roles read/write 清单）。原则：**LLM 判断 relevance，
-Policy 判断 permission**。
-
-### 6. Handoff Manager
-
-Structured Handoff（conclusion/evidence/constraints/unresolved/
-recommended_actions/files/confidence）+ Lossless Reference 与 Compressed
-Transfer 两种模式。
-
-### 7. Knowledge Bridge
-
-`query(topic)/get(ref)/propose(candidate)` 接口，适配 OpenWiki 或任意
-Markdown 知识库。V0.1 实现为本地 `.agent/knowledge/` 引用层。
-
-### 8. Runtime Observer
-
-机器可读事件（session.created/context.injected/memory.promoted/
-handoff.created/...），不做 Dashboard。
-
-## 目录结构
+## 四层解耦（AT 角色收缩）
 
 ```text
-project/
-├── AGENTS.md
-├── src/
-├── tests/
-├── docs/
-└── .agent/
-    ├── manifest.yaml
-    ├── policies.yaml
-    ├── runtime/
-    │   ├── sessions/
-    │   ├── tasks/
-    │   └── events/
-    ├── contexts/
-    │   ├── bundles/
-    │   └── cache/
-    ├── memory/
-    │   ├── short/
-    │   ├── medium/
-    │   └── long/
-    ├── handoffs/
-    ├── artifacts/
-    └── knowledge/
-        └── refs/
+Superpowers → 怎么做（workflow）            ← 复用，不实现
+AT Runtime  → 记住什么（三层记忆 + 生命线）★ 核心交付
+Execution   → 在哪里运行（Codex CLI）        ← 复用，不实现
+Knowledge   → 项目已知什么（OpenWiki/CodeAlmanac）← 复用，不实现
 ```
+
+稳定的是协议对象：**Memory、Scope、Status、Timeline**；其余（workflow /
+knowledge / execution）都是可替换 Adapter。
+
+## 核心设计原则
+
+1. **记忆可见**：记忆是给人看的，Markdown 实时落盘，目录即视图。
+2. **记忆有 Scope**：任何记忆都有归属（session/task/feature/project/role）。
+3. **记忆流动靠人**：promotion / 清理是人工决策，不做自动 GC 与自动提炼。
+4. **生命周期可回滚**：生命线节点全量快照，随时查看、可回滚（回滚前自动
+   打恢复点）。
+5. **其他全部复用**：workflow/knowledge/execution 一律复用开源，不自研。
+
+## 模块分层
+
+### 核心（自研交付）
+
+| 模块 | 职责 |
+|---|---|
+| Memory Manager | 三层存储（Markdown 落盘）、Memory URI、状态机 |
+| Memory View | 树视图：三层全貌、scope 分组、状态/来源/时间 |
+| Memory Lifecycle | 人工操作：promote / archive / discard |
+| Timeline | 生命线：checkpoint（快照）/ timeline（列表）/ rollback（恢复） |
+| Observer | 记忆读写与操作审计事件（JSONL + 时间戳） |
+| CLI | `at memory` 命令族 |
+
+### 支撑（最小脚手架，不扩展）
+
+| 模块 | 职责 |
+|---|---|
+| Session Registry | 记录谁在做什么任务 |
+| Context Router / Assembler | 组装 Context Bundle（服务记忆注入） |
+| Policy Engine | role read/write 白名单（读侧过滤已接线） |
+| Handoff Manager | 段间结论传递（结构化 handoff） |
+
+### 复用层（适配不实现）
+
+- Workflow → **Superpowers**（本机已装 6.2.0，V0.2 接入无风险）
+- Knowledge → **CodeAlmanac**（首选，macOS-only 需验证）/ **openwiki**（备选）
+- Execution → **Codex CLI**（LocalAdapter 已实现；并行执行 V0.4 自建
+  tmux+worktree，不依赖 TUI 型三方工具）
 
 ## 数据模型
 
 ### Memory URI
 
 ```text
-memory://project/<name>/long
-memory://feature/<name>/medium
-memory://task/<id>/medium
-memory://role/<role>/long
 memory://session/<id>/short
+memory://task/<id>/medium
+memory://feature/<name>/medium
+memory://project/<name>/long
+memory://role/<role>/long
 ```
 
-### Memory 三层
+### 三层定义
 
-- **Short**：单 Session/Stage，高频变化，任务结束大量销毁。
-- **Medium**：Task/Feature 周期，最重要；保存 root cause、约束、失败尝试、
-  决策；role-specific view 受控共享。
-- **Long**：跨任务、稳定、已验证、项目级；必须克制 + 晋升规则。
+- **Short**：单 Session/Stage，高频变化，任务结束由人工清理。
+- **Medium**：Task/Feature 周期，保存 root cause、约束、失败尝试、决策；
+  最重要的一层。
+- **Long**：跨任务、稳定、已验证、项目级；必须经过人工 promote。
 
-### Context Bundle
-
-```yaml
-context_bundle:
-  id: CB-<task>-<role>-<seq>
-  task: {id, goal}
-  role: {type}
-  constraints: [...]
-  handoff: {from, summary}
-  evidence: [{file, lines}]
-  relevant_memory: [memory://...]
-  knowledge: [wiki://...]
-  expected_output: [...]
-  token_budget: {max_context}
-```
-
-### Policy 示例
-
-```yaml
-roles:
-  analysis: {read: [source, wiki, project_memory, analysis_memory],
-             write: [short_memory, feature_memory, handoff:analysis_to_code]}
-  code:     {read: [source, wiki, project_memory, code_memory, handoff:analysis_to_code],
-             write: [source, short_memory, feature_memory, handoff:code_to_test]}
-  test:     {read: [source, wiki, project_memory, test_memory, handoff:code_to_test],
-             write: [test_artifacts, test_memory, handoff:test_to_code]}
-```
-
-## 核心 API（仅 7 个）
+### 状态机（人工驱动）
 
 ```text
-create_task()
-create_session()
-build_context()
-write_memory()
-create_handoff()
-complete_session()
-promote_memory()
+candidate ──promote──▶ active ──promote──▶ verified
+    │                    │                    │
+    └────discard─────────┴────discard─────────┘
+                archive（任意状态可归档）
 ```
 
-第一版不允许出现二三十个核心接口。
+### 存储格式
+
+- 记忆正文：Markdown，`.agent/memory/<tier>/<scope>-<name>.md`，追加式，
+  YAML 多文档流保存元数据（content/source/status/created_at 保真）。
+- 生命线：`.agent/timeline/<ts>-<label>/`，含 `meta.yaml`（时间/标签/来源）
+  与三层全量快照 Markdown。
+- 事件：`.agent/runtime/events/events.jsonl`，行级 JSON + 时间戳。
 
 ## CLI 边界
 
 ```text
-at init
-at status
-at context inspect
-at memory inspect
-at task start
-at handoff inspect
-at spawn
-at doctor
+at memory view [--all]              # 树视图（默认活跃，--all 全状态）
+at memory promote <uri> [--to]      # 人工提升（可跨层）
+at memory archive <uri>             # 归档
+at memory discard <uri>             # 废弃
+at memory checkpoint <label>        # 打生命线节点（全量快照）
+at memory timeline                  # 查看时间线
+at memory rollback <node>           # 回滚（自动先打恢复点）
+
+at init / at task run / at eval / at doctor   # 支撑命令
 ```
 
-正常使用中用户不直接敲这些命令——Codex 通过 AGENTS.md/Skills 调用。
+正常使用中用户不直接敲命令——Codex 通过 AGENTS.md / Skills 调用（例如
+checkpoint skill 用触发词触发 `at memory checkpoint`）。
 
-## MVP V0.1 验证门
+## Skill 触发（时间节点）
 
-用 Codex provider 跑通一个三 session 任务（analysis → handoff → code →
-handoff → test），且满足：
+- 位置：`C:\Users\kk\.codex\skills`（全局自动发现）
+- 触发词：对话中出现"打点 / 记录时间节点 / 存个档 / checkpoint"等意图时，
+  Codex 运行 `at memory checkpoint <label>`
+- 生命周期：每次开发的关键时间节点（阶段完成、重大决策、发现/修复）由人
+  触发记录，形成可查看、可回滚的开发时间线
 
-1. 三个 Session 的 context（Context Bundle）互不共享。
-2. 三个 Session 的 short memory 互不共享。
-3. Task medium memory 可受控共享（role-specific view）。
-4. Project long memory 可共享。
-5. Agent 之间只通过 handoff 交换结果（无完整 conversation 复制）。
-6. Runtime Observer 记录了 context.injected / handoff.created 等事件。
-7. `at doctor` 与单元测试通过。
+## 验证门（v2.1）
 
-## 风险与 V0.1 务实决策（可用性优先）
+1. `at memory view` 树视图正确展示三层、scope、状态、来源、时间
+2. memory 写读往返保真（多行 content、嵌套 source）
+3. promote / archive / discard 状态流转正确且落盘
+4. checkpoint 生成全量快照；timeline 列出节点；rollback 恢复并先打恢复点
+5. checkpoint skill 触发词可触发打点
+6. 全量单元测试 + `at doctor` 通过
 
-### 风险 1：Context Router 的 relevance 判定
+## 风险与务实决策
 
-**决策：V0.1 不做 LLM 检索。** relevance 由三层静态机制决定：
-
-1. **显式引用**：Task 创建时由调用方声明需要哪些 source/wiki/memory 引用，
-   写入 Context Bundle 的 evidence / relevant_memory / knowledge 字段。
-2. **Policy 静态规则**：角色的 read 清单决定 permission 边界。
-3. **默认最小集**：Task 本身、Hard Constraints、Handoff 永远进入 Context，
-   其余一律不自动注入。
-
-一句话：V0.1 的 Context Router = 显式声明 + 静态授权，不引入检索不确定性与
-额外 LLM 成本。检索能力留到后续版本。
-
-### 风险 2：Execution 模型模糊
-
-**决策：V0.1 采用进程级隔离。** 每个 Agent Session = LocalAdapter 启动一个
-新的 Codex 进程调用，输入是组装好的 Context Bundle（prompt），输出是
-Handoff/Artifact。Session 之间没有会话连续性，隔离是真实的；"Context is
-constructed" 原则从第一版就落地。
-
-代价（显式接受）：每次 session 需重新加载项目相关上下文；由显式引用机制
-控制注入量，避免全量加载。
-
-### 风险 3：验证时机太晚
-
-**决策：V0.1 自带最小对比实验。** 验证门增加：
-
-- Baseline：单个 Codex 长会话直接完成任务。
-- AT 模式：analysis → code → test 三 session（只通过 handoff）。
-- 同一 demo 任务，对比：Task Success、估算 Context tokens、Handoff
-  Sufficiency（test 仅凭 handoff 是否能完成）。
-- Runtime Observer 记录 `context.injected` 的 token 估算（按输入文本长度
-  估算，不引入 tokenizer 依赖）。
-- 提供 `at eval` 或等价脚本产出对比摘要。
-
-V0.5 的完整 Benchmark 框架不做；V0.1 只做"能证明机制方向"的最小实验。
-
-### 可用性优先原则（贯穿 V0.1）
-
-- 8 个模块只做能跑通的最小实现；不做前瞻机制。
-- Memory Promotion：V0.1 用手动/简单规则触发（`at memory promote`），不做
-  自动提炼与完整 GC。
-- 无 Context Priority Score 算法、无 Dashboard、无并行调度。
-- 任何"机制"若没有在验证门中被使用，就不实现。
+1. **隔离是 API/命名空间级（软隔离）**：执行层 agent 与 runtime 共享文件
+   系统；读侧 Policy 过滤已强制，写侧 `can_write` 待接线；执行 sandbox
+   限制（`.agent/` 只读/不可见）作为 v2.1 的信任模型决策点。
+2. **relevance 显式引用**：Context Router 不做 LLM 检索，relevance = 显式
+   声明 + 静态 Policy + 默认最小集；检索留待复用层。
+3. **进程级隔离**：每 session 一个新 Codex 进程，无会话连续性。
+4. **最小对比 eval**：baseline 单会话 vs AT 三 session，对比成功/token/
+   handoff 充分性；完整 Benchmark 不做。
+5. **不做**：自动 GC、自动提升、自动摘要、Web 面板、语言翻译链路。
 
 ## 技术栈与存储
 
-- Python 3.10+。
-- 文件系统存储：YAML（manifest/policies）、JSON（context bundle/handoff/
-  memory 元数据）、Markdown（memory 正文/artifact）。
+- Python 3.10+；PyYAML 唯一新增依赖。
+- 文件系统存储：Markdown（记忆正文/快照）、YAML（元数据/策略）、JSON（事件）。
 - 无数据库、无 Web 框架、无网络依赖（Codex provider 通过现有 CLI 进程调用）。
+- v2 本地存放 `.agent/` 与 v1 的 `.at/` 完全隔离，均 gitignored。
 
 ## 与 v1 的关系
 
-- 在 `v2.0` 分支上仓库内重写：删除 `src/at_flow/`、`web/`、`deploy/` 等 v1
-  实现，替换为 `src/at_runtime/` 与 `at` CLI；v1 完整保留在 git 历史。
+- `v2.0` 分支仓库内重写，v1 实现完整保留在 git 历史。
 - 复用 v1 经验但不迁移代码：不做语言翻译、不做 Web/云、不做重型状态机。
+- v1 教训：编排成本大于产出；v2 只保留"记忆"这一有确定性价值的部分。

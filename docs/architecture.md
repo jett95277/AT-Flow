@@ -1,189 +1,171 @@
-# AT Flow Architecture
+# AT 总架构设计（v2 系列）
 
-## Purpose
+> 更新日期：2026-08-08 ｜ 分支：v2.0 ｜ 当前目标：v2.1 记忆 MVP
 
-AT Flow coordinates a small team of specialized CLI agents around one shared
-project. It keeps agent responsibilities separate while giving every session
-controlled access to shared memory, skills, and project files.
+## 1. 定位
 
-The project is positioned as a personal assistive development workflow, not a
-product. Decisions favor the developer's own workflow efficiency, observable
-behavior, and verifiable results. Product polish, onboarding, marketing copy,
-and audience-driven UI work are out of scope.
+AT v2 是**个人辅助开发工具流中的记忆层**：管理三层记忆（short / medium /
+long）的可见性、人工操作与生命周期。不替代 Codex、不重复实现
+workflow / knowledge / execution，其余全部复用开源技术。
 
-## Agent model
+核心问题只有一个：
 
-The default pipeline is serial:
+> 让人（和 Agent）清楚地看到当前记住了什么，并能在需要时查看、提升、回滚。
 
-1. `main`: frames the request, boundaries, and acceptance criteria.
-2. `analysis`: turns the request into a plan, assumptions, and risk notes.
-3. `code`: performs or describes implementation work.
-4. `test`: verifies the result and records the final report.
+## 2. 价值主张
 
-The platform stores every agent artifact under that agent's own directory. The
-handoff between agents is file based: later agents receive paths to earlier
-artifacts instead of sharing one mutable conversation buffer.
+长任务下模型上下文"装得下但不划算"：token 线性膨胀、每步变慢、早期信息
+注意力衰减。AT 分段让每段上下文保持恒定小区间，段间用 handoff 传递结论；
+同时把记忆完全透明给人工，由人做提升与清理决策。
 
-Each agent also has a package containing `agent.md`, `permissions.json`, and
-`output.md`. Canonical role packages live at `.at/agents/<agent>` outside the
-shared knowledge area. Each session receives a snapshot under
-`.at/sessions/<id>/agents/<agent>` so a running Session cannot be changed by a
-later edit to the canonical package.
-
-## Isolation model
-
-Physical isolation:
-
-- each AT session has a dedicated directory under `.at/sessions`
-- each agent has a dedicated directory under `.at/sessions/<id>/agents`
-- process providers run with the agent's private `workspace` as their current
-  directory by default
-- each session stores an immutable-by-convention snapshot of the agent contract
-- each agent has separate `inbox`, `outbox`, and `workspace` directories
-
-Logical isolation:
-
-- each agent receives a prompt containing only its own agent package
-- each agent receives a `context.json` contract listing only authorized shared
-  files, project files, and prior handoff files routed into its own inbox
-- process providers receive a minimal environment by default
-- session state is persisted in `state.json`
-
-## Shared areas
-
-Shared files live under `.at/shared`:
-
-- `memory`: long-lived notes and decisions
-- `skills`: reusable instructions, recipes, and tool notes
-- `policies`: context and memory governance rules
-- `docs`: shared reference documents selected into context by AT
-- `inbox`: cross-session scratchpad and incoming material
-
-Shared projects live under `.at/projects` by default, but a session can point to
-any project path.
-
-`.at/shared` intentionally contains no platform Agent definitions. A directory
-named `.at/shared/agents` is ordinary user-shared content only when explicitly
-created after migration; AT does not treat it as a role package.
-
-## Language Service
-
-The V1.8 language pipeline is explicit and persisted:
+## 3. 版本路线
 
 ```text
-Chinese user task
-  -> Language Service input translation
-  -> English task_runtime
-  -> English Agent prompt/context/artifact/handoff
-  -> Language Service display translation
-  -> Chinese artifact.zh.md for Web Console
+v2.0  机制验证（已交付）：8 模块 + 三 session 隔离 + 最小 eval
+v2.1  记忆 MVP（当前目标）：三层记忆 + 树视图 + 人工操作 + 生命线 + skill
+v2.2  复用 Superpowers（workflow 适配）
+v2.3  复用 Knowledge（OpenWiki / CodeAlmanac 适配）
+v2.4  并行执行（tmux + git worktree）
 ```
 
-`language.json` records input and display translation status, provider, error,
-and timestamps. English `artifact.md` is the only downstream engineering
-handoff. Chinese `artifact.zh.md` is display-only.
+MVP 门槛 = v2.1。v2.2 起全部是复用开源技术的适配层。
 
-Translation uses an explicitly selected process provider through a restricted
-boundary. Its environment and context receive no project, shared-memory, Agent,
-or Session-control path. Literal paths already present in an artifact remain part
-of the source text and must be preserved unchanged. Required input translation
-failure stops the current step; display translation failure is shown to the user
-but does not invalidate a valid English engineering artifact. AT never silently
-substitutes the original text.
+## 4. 模块分层
 
-Translation instructions live in the platform skill
-`.at/shared/skills/language-translation/` (`SKILL.md` + `glossary.md`).
-`LanguageService` attaches the skill directory to the process translator for
-both input and display translation; the skill text becomes the instruction
-prefix of the translation prompt. A missing skill is a typed, non-retryable
-configuration failure; there is no fallback to hard-coded instructions.
+### 核心（自研交付）
 
-Fixed Agent contract documents (`.at/agents/<agent>/agent.md`, `output.md`)
-have reviewed Chinese display copies (`agent.zh.md`, `output.zh.md`) served by
-the document API by default. JSON configuration stays English. Display copies
-are static and do not consume runtime translation tokens.
+| 模块 | 职责 | 载体 |
+|---|---|---|
+| Memory Manager | 三层存储（Markdown 落盘）、Memory URI、状态机 | `memory.py` |
+| Memory View | 树视图：三层全貌、scope 分组、状态/来源/时间 | `view.py` |
+| Memory Lifecycle | 人工操作：promote / archive / discard | `memory.py` |
+| Timeline | 生命线：checkpoint / timeline / rollback | `timeline.py` |
+| Observer | 记忆读写与操作审计事件（JSONL + 时间戳） | `observer.py` |
+| CLI | `at memory` 命令族 | `cli.py` |
 
-Process providers use an explicit UTF-8 text contract by default. On Windows,
-`.cmd` and `.bat` launchers are resolved through `cmd.exe`, while native
-executables remain direct child processes. AT owns the process group and
-terminates the complete child tree on timeout.
+### 支撑（最小脚手架，不扩展）
 
-## State machine
+Session Registry（`registry.py`）、Context Router / Assembler（`context.py`）、
+Policy Engine（`policy.py`）、Handoff Manager（`handoff.py`）——让记忆产生与
+流动，保持最小实现。
 
-Each step has one of these statuses:
+### 复用层（适配不实现）
 
-- `queued`
-- `running`
-- `done`
-- `failed`
+- Workflow → **Superpowers**（已装 6.2.0）
+- Knowledge → **CodeAlmanac**（macOS-only 需验证）/ **openwiki**（备选）
+- Execution → **Codex CLI**（`execution.py` LocalAdapter 已实现）
 
-A session can be resumed after interruption. A lock file prevents two runners
-from advancing the same session at the same time. The lock records its owner PID;
-the next runner may reclaim it only when that PID is no longer alive.
+## 5. v2.1 记忆核心设计
 
-## Runtime Nodes
+### 5.1 Memory URI 与三层
 
-AT advances each step through platform-controlled nodes:
+```text
+memory://session/<id>/short     # 单会话，任务结束人工清理
+memory://task/<id>/medium       # 任务周期，最重要
+memory://feature/<name>/medium
+memory://project/<name>/long    # 跨任务，人工 promote 后才进入
+memory://role/<role>/long
+```
 
-1. `prepare_agent`: create physical directories and materialize contracts.
-2. `route_prior_handoff`: copy prior artifacts into the current inbox.
-3. `build_context`: write the agent-specific `context.json` contract.
-4. `run_agent`: execute the configured provider from the private workspace.
-5. `collect_output`: ensure `outbox/artifact.md` exists.
-6. `collect_memory_proposals`: copy proposed memory updates to the session.
-7. `audit_permissions`: compare protected path snapshots with permissions.
-8. `route_handoff`: copy the current artifact to `handoff` and the next inbox.
-9. `update_state`: persist the result.
+### 5.2 状态机（人工驱动）
 
-Agents do not directly advance the state machine or copy files into another
-agent's directory.
+```text
+candidate ──promote──▶ active ──promote──▶ verified
+    │                    │                    │
+    └────discard─────────┴────discard─────────┘
+                archive（任意状态可归档）
+```
 
-## Permission Audit
+- 同层 promote：`candidate→active→verified`，verified 到顶不可再升
+- 跨层 promote（`--to`）：文件迁移到目标 tier，状态置 active；来源 verified
+  且目标 long 时保持 verified
+- archive / discard：文件内全部条目统一置 archived / deprecated
 
-The first audit layer is path based. It compares snapshots before and after a
-provider run for:
+### 5.3 存储格式
 
-- `.at/shared`
-- the shared project path
-- other agent directories
-- `state.json`
-- `handoff`
+```text
+.agent/memory/<tier>/<scope>-<name>.md     # 记忆正文：Markdown，追加式，
+                                           # YAML 多文档流保真元数据
+.agent/timeline/<ts>-<label>/              # 生命线节点
+    ├── meta.yaml                          # id / label / created_at / 各层条目数
+    └── memory/{short,medium,long}/        # 三层全量快照（复制）
+.agent/runtime/events/events.jsonl         # 审计事件（行级 JSON + 时间戳）
+```
 
-By default, only `code` may write the shared project. No agent may directly write
-shared memory, skills, policies, another agent's files, or session control
-files.
+### 5.4 CLI 命令族
 
-## Process Sandbox
+```text
+at memory view [--all]              # 树视图（默认活跃，--all 含归档/废弃）
+at memory promote <uri> [--to]      # 人工提升（可跨层）
+at memory archive <uri>             # 归档
+at memory discard <uri>             # 废弃
+at memory checkpoint <label>        # 打生命线节点（全量快照）
+at memory timeline                  # 查看时间线
+at memory rollback <node>           # 回滚（自动先打恢复点）
 
-The default process provider environment is minimal. AT passes the current
-agent's own directories, contract files, and only the shared/project paths granted
-by `permissions.json`.
+at init / at task run / at eval / at doctor   # 支撑命令
+```
 
-Default AT variables:
+### 5.5 skill 触发（时间节点）
 
-- `AT_SESSION_ID`
-- `AT_AGENT`
-- `AT_AGENT_DIR`
-- `AT_INBOX`
-- `AT_OUTBOX`
-- `AT_AGENT_WORKSPACE`
-- `AT_PERMISSIONS`
-- `AT_OUTPUT_CONTRACT`
-- `AT_CONTEXT`
-- `AT_SHARED_MEMORY`, `AT_SHARED_SKILLS`, and `AT_SHARED_INBOX` when readable
-- `AT_PROJECT_PATH` when project access is granted
+- 位置：`C:\Users\kk\.codex\skills\at-memory-checkpoint`
+- 触发词：用户说"打点 / 记录时间节点 / 存个档 / checkpoint"等意图时触发
+- 动作：运行 `at memory checkpoint <label>`，记录开发里程碑到生命线
 
-AT does not pass workspace root, shared root, or session root in the default
-process sandbox. A provider can opt into `env_policy: "inherit"` when required,
-but that should be treated as a larger trust boundary.
+## 6. v2.0 隔离机制（支撑记忆产生与流动）
 
-## Provider adapter
+- **Context 构建时隔离**：每 session 从零组装 Context Bundle，无会话继承；
+  注入前按 role read 白名单过滤，被拒项记入 `bundle.policy.filtered`
+- **Memory 存储层隔离**：tier 目录 + scope 前缀双隔离，无全局遍历 API
+- **Scope 读侧强制**：Policy 读过滤已接线；写侧 `can_write` 待接线（v2.1
+  信任模型决策点）
+- **进程级隔离**：每 session 一个新 Codex 进程，无会话连续性
+- **Structured Handoff**：段间唯一数据通道，不复制完整对话
 
-The provider boundary is deliberately narrow:
+## 7. 一次任务的数据流
 
-- AT builds a complete prompt for one agent step.
-- A provider returns text output.
-- AT writes that output as the step artifact and advances the state machine.
+```text
+create_task → create_session → build_context（Policy 过滤）
+  → LocalAdapter（spawn Codex）→ collect output
+  → create_handoff（注入下一 session）
+  → 关键节点人工触发 at memory checkpoint（打生命线）
+  → 任务中沉淀的记忆由人 promote 到 medium / long
+```
 
-This makes Codex, opencode, and other CLIs interchangeable as long as they can
-accept a prompt through stdin, an argument, or a prompt file.
+## 8. 目录结构
+
+```text
+project/
+├── AGENTS.md
+├── src/at_runtime/          # 核心实现
+├── tests/                   # 单元测试
+├── docs/                    # 架构 / spec / plan
+└── .agent/                  # v2 本地运行时数据（gitignored）
+    ├── manifest.yaml / policies.yaml
+    ├── runtime/{sessions,tasks,events}/
+    ├── memory/{short,medium,long}/
+    ├── timeline/<ts>-<label>/
+    ├── handoffs/
+    ├── artifacts/
+    └── knowledge/refs/
+```
+
+v2 本地存放 `.agent/` 与 v1 的 `.at/` 完全隔离（v2 代码对 `.at` 零引用，
+两者均 gitignored）。
+
+## 9. 边界与已知限制（诚实声明）
+
+1. **隔离是 API/命名空间级（软隔离）**：读侧强制、写侧待接线；执行 sandbox
+   限制是 v2.1 信任模型决策点
+2. **relevance 显式引用**：无 LLM 检索，检索留待复用层
+3. **不做**：自动 GC / 自动提升 / 自动摘要 / Web 面板 / 语言翻译链路
+4. **无 DB / Web / 网络依赖**（除 Codex 自身）；PyYAML 唯一新增依赖
+5. v2.1 前：`at memory view/promote/checkpoint/timeline/rollback` 与 skill
+   尚未实现（见实现计划）
+
+## 10. 文档索引
+
+- 详细设计：`docs/superpowers/specs/2026-08-08-at-v2-context-runtime-design.md`
+- 实现计划：`docs/superpowers/plans/2026-08-08-at-v2-1-memory-mvp-implementation-plan.md`
+- 快速总览：`docs/architecture-v2.md`
+- 开发原则：`docs/developing-at-v2.md`
