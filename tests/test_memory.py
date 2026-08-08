@@ -15,6 +15,7 @@ from at_runtime.memory import (
     promote_memory,
     read_memory,
     write_memory,
+    write_memory_structured,
 )
 from at_runtime.workspace import initialize_workspace
 
@@ -165,6 +166,69 @@ class MemoryLifecycleTests(unittest.TestCase):
             events = [e["event"] for e in list_events(root)]
             self.assertIn("memory.promoted", events)
             self.assertIn("memory.archived", events)
+
+
+class StructuredWriteTests(unittest.TestCase):
+    def test_write_structured_three_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            item = write_memory_structured(
+                root,
+                "memory://session/A/short",
+                conclusion="beam < 2 skipped",
+                constraints=["keep schema"],
+                unresolved=["threshold config?"],
+                source={"task": "T17"},
+            )
+            self.assertEqual(item["content"], "beam < 2 skipped")
+            self.assertEqual(item["constraints"], ["keep schema"])
+            self.assertEqual(item["unresolved"], ["threshold config?"])
+            self.assertEqual(item["status"], "candidate")
+            loaded = read_memory(root, "memory://session/A/short")[0]
+            self.assertEqual(loaded["constraints"], ["keep schema"])
+            self.assertEqual(loaded["source"], {"task": "T17"})
+
+    def test_write_structured_partial_fields_allowed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            item = write_memory_structured(
+                root, "memory://session/A/short", conclusion="only conclusion"
+            )
+            self.assertEqual(item["constraints"], [])
+            self.assertEqual(item["unresolved"], [])
+
+    def test_write_structured_all_empty_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            with self.assertRaises(ValueError):
+                write_memory_structured(root, "memory://session/A/short")
+
+    def test_get_returns_structured_entries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            write_memory_structured(
+                root,
+                "memory://task/T17/medium",
+                conclusion="root cause",
+                constraints=["keep schema"],
+            )
+            loaded = read_memory(root, "memory://task/T17/medium")
+            self.assertEqual(loaded[0]["content"], "root cause")
+            self.assertEqual(loaded[0]["constraints"], ["keep schema"])
+
+    def test_write_records_audit_event(self):
+        from at_runtime.observer import list_events
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            write_memory_structured(root, "memory://session/A/short", conclusion="note")
+            events = [e["event"] for e in list_events(root)]
+            self.assertIn("memory.write", events)
 
 
 if __name__ == "__main__":

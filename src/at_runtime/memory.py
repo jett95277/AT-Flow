@@ -156,6 +156,36 @@ def discard_memory(root: Path, uri: str) -> dict[str, Any]:
     return _update_entries(root, uri, "deprecated", "memory.discarded")
 
 
+def write_memory_structured(
+    root: Path,
+    uri: str,
+    conclusion: str = "",
+    constraints: list[str] | None = None,
+    unresolved: list[str] | None = None,
+    source: dict | None = None,
+) -> dict[str, Any]:
+    constraints = constraints or []
+    unresolved = unresolved or []
+    if not conclusion and not constraints and not unresolved:
+        raise ValueError("at least one field required (conclusion/constraints/unresolved)")
+    item = {
+        "uri": uri,
+        "content": conclusion,
+        "constraints": constraints,
+        "unresolved": unresolved,
+        "status": "candidate",
+        "source": source or {},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    path = memory_path(root, uri)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entries = _load_entries(path) if path.exists() else []
+    entries.append(item)
+    _save_entries(path, entries)
+    record_event(root, "memory.write", None, {"uri": uri, "content_length": len(conclusion)})
+    return item
+
+
 def _load_entries(path: Path) -> list[dict[str, Any]]:
     text = path.read_text(encoding="utf-8")
     return [
