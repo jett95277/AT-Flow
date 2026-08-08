@@ -117,6 +117,7 @@ def promote_memory(root: Path, uri: str, to_tier: str | None = None) -> dict[str
         new_uri = _cross_tier_target(entries[-1], uri, to_tier)
         for entry in entries:
             entry["status"] = "verified" if to_tier == "long" else "active"
+            entry["uri"] = new_uri
         new_path = memory_path(root, new_uri)
         new_path.parent.mkdir(parents=True, exist_ok=True)
         if new_path.exists():

@@ -103,10 +103,23 @@ python -m venv .venv
 
 # 检查工作区健康
 .venv\Scripts\at doctor
+
+# 写入结构化记忆（结论 / 约束 / 未解决问题）
+.venv\Scripts\at memory write memory://session/s1/short --conclusion "beam < 2 skipped" --constraint "keep schema" --unresolved "threshold config?" --task T17
+
+# 查看三层记忆树 / 读取 / 人工操作
+.venv\Scripts\at memory view
+.venv\Scripts\at memory get memory://session/s1/short
+.venv\Scripts\at memory promote memory://session/s1/short --to medium
+
+# 生命线：打点 / 时间线 / 回滚
+.venv\Scripts\at memory checkpoint "fix beam stability"
+.venv\Scripts\at memory timeline
+.venv\Scripts\at memory rollback 20260808T114110-fix-beam-stability
 ```
 
-v2.1 记忆层命令族（`at memory write / view / promote / archive / discard /
-checkpoint / timeline / rollback`）设计中，见
+v2.1 记忆层命令族（`at memory write / get / view / promote / archive /
+discard / checkpoint / timeline / rollback`）已实现，实现计划见
 `docs/superpowers/plans/2026-08-08-at-v2-1-memory-mvp-implementation-plan.md`。
 
 ## 文档索引

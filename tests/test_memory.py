@@ -110,6 +110,7 @@ class MemoryLifecycleTests(unittest.TestCase):
             self._write(root, "memory://session/A/short", source={"task": "T17"})
             result = promote_memory(root, "memory://session/A/short", to_tier="medium")
             self.assertEqual(result["status"], "active")
+            self.assertEqual(result["uri"], "memory://task/T17/medium")
             self.assertTrue((root / ".agent/memory/medium/task-T17.md").exists())
             self.assertFalse((root / ".agent/memory/short/session-A.md").exists())
 
