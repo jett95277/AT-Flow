@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 from pathlib import Path
 import sys
@@ -28,7 +29,7 @@ from at_runtime.memory import (
 )
 from at_runtime.runner import run_doctor, run_task_flow
 from at_runtime.timeline import create_checkpoint, list_checkpoints, rollback_memory
-from at_runtime.view import render_memory_tree
+from at_runtime.view import render_memory_export, render_memory_tree
 from at_runtime.workspace import initialize_workspace
 
 
@@ -67,6 +68,11 @@ def main(argv: list[str] | None = None) -> int:
     memory_sub.add_parser("timeline", help="list checkpoints")
     rollback = memory_sub.add_parser("rollback", help="rollback memory to checkpoint")
     rollback.add_argument("node", help="checkpoint id (from timeline)")
+    export = memory_sub.add_parser("export", help="export memory as markdown report")
+    export.add_argument("--out", default=None, help="output file path")
+    export.add_argument("--stdout", action="store_true", help="print report to stdout")
+    export.add_argument("--all", action="store_true",
+                        help="include archived/deprecated entries")
     context_parser = subparsers.add_parser("context", help="inspect context")
     context_sub = context_parser.add_subparsers(dest="context_command", required=True)
     context_inspect = context_sub.add_parser("inspect", help="build and show context bundle")
@@ -149,6 +155,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.memory_command == "rollback":
             result = rollback_memory(root, args.node)
             print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.memory_command == "export":
+            report = render_memory_export(root, include_all=args.all)
+            if args.stdout:
+                print(report)
+                return 0
+            out_dir = root / ".agent/export"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%dT%H%M%S")
+            out_path = Path(args.out) if args.out else out_dir / f"memory-{ts}.md"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(report, encoding="utf-8")
+            print(f"exported: {out_path}")
             return 0
     if args.command == "context":
         if args.context_command == "inspect":

@@ -106,5 +106,25 @@ class ExportTests(unittest.TestCase):
             self.assertIn("hidden", render_memory_export(root, include_all=True))
 
 
+class CliExportTests(unittest.TestCase):
+    def test_cli_export_writes_file(self):
+        from at_runtime.cli import main
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            write_memory_structured(root, "memory://task/T17/medium", conclusion="root cause")
+            old = os.getcwd()
+            os.chdir(root)
+            try:
+                code = main(["memory", "export"])
+            finally:
+                os.chdir(old)
+            self.assertEqual(code, 0)
+            exports = list((root / ".agent/export").glob("memory-*.md"))
+            self.assertEqual(len(exports), 1)
+            self.assertIn("root cause", exports[0].read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()
