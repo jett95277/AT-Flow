@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 from at_runtime.memory import list_tier_entries
@@ -28,4 +29,45 @@ def render_memory_tree(root: Path, include_all: bool = False) -> str:
                 content = (entry.get("content", "") or "").splitlines()[0][:50]
                 created = entry.get("created_at", "")[:16]
                 lines.append(f"│   │   └── [{status}] {content} · {created}")
+    return "\n".join(lines)
+
+
+def render_memory_export(root: Path, include_all: bool = False) -> str:
+    lines = [
+        "# AT Memory Export",
+        "",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        "",
+    ]
+    for tier in ("short", "medium", "long"):
+        lines.append(f"## {tier}")
+        lines.append("")
+        entries = list_tier_entries(root, tier, include_all=include_all)
+        by_name: dict[str, list[dict]] = {}
+        for entry in entries:
+            parts = entry.get("uri", "").split("/")
+            name = f"{parts[2]}-{parts[3]}" if len(parts) >= 5 else "unknown"
+            by_name.setdefault(name, []).append(entry)
+        if not by_name:
+            lines.append("_(empty)_")
+            lines.append("")
+            continue
+        for name, name_entries in sorted(by_name.items()):
+            lines.append(f"### {name}")
+            for entry in name_entries:
+                status = entry.get("status", "candidate")
+                content = entry.get("content", "") or ""
+                lines.append(f"- [{status}] {content}")
+                for label, key in (("Constraints", "constraints"),
+                                   ("Unresolved", "unresolved")):
+                    items = entry.get(key) or []
+                    if items:
+                        lines.append(f"  {label}:")
+                        for item in items:
+                            lines.append(f"    - {item}")
+                source = entry.get("source") or {}
+                created = entry.get("created_at", "")
+                lines.append(f"  Source: {source} | Created: {created}")
+            lines.append("")
+        lines.append("")
     return "\n".join(lines)

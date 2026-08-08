@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from at_runtime.memory import archive_memory, write_memory_structured
-from at_runtime.view import render_memory_tree
+from at_runtime.view import render_memory_export, render_memory_tree
 from at_runtime.workspace import initialize_workspace
 
 
@@ -71,6 +71,39 @@ class CliMemoryTests(unittest.TestCase):
                 os.chdir(old)
             self.assertEqual(code, 0)
             self.assertTrue((root / ".agent/memory/medium/task-T17.md").exists())
+
+
+class ExportTests(unittest.TestCase):
+    def test_export_contains_tiers_and_entry_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            write_memory_structured(
+                root,
+                "memory://task/T17/medium",
+                conclusion="root cause",
+                constraints=["keep schema"],
+                unresolved=["threshold?"],
+                source={"project": "P"},
+            )
+            report = render_memory_export(root)
+            self.assertIn("# AT Memory Export", report)
+            self.assertIn("## short", report)
+            self.assertIn("## medium", report)
+            self.assertIn("## long", report)
+            self.assertIn("root cause", report)
+            self.assertIn("keep schema", report)
+            self.assertIn("threshold?", report)
+            self.assertIn("task-T17", report)
+
+    def test_export_hides_inactive_by_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize_workspace(root)
+            write_memory_structured(root, "memory://session/A/short", conclusion="hidden")
+            archive_memory(root, "memory://session/A/short")
+            self.assertNotIn("hidden", render_memory_export(root))
+            self.assertIn("hidden", render_memory_export(root, include_all=True))
 
 
 if __name__ == "__main__":
