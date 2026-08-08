@@ -3,6 +3,18 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
+
+
+if sys.platform == "win32":
+    # Windows 编码适配：直接显示时 conhost 按系统代码页（936/GBK）解码，
+    # 管道/重定向时 PowerShell 按 [Console]::OutputEncoding（UTF-8）解码。
+    encoding = "utf-8" if not sys.stdout.isatty() else "cp936"
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding=encoding)
+        except (AttributeError, ValueError):
+            pass
 
 from at_runtime.context import build_context
 from at_runtime.eval import run_minimal_eval
