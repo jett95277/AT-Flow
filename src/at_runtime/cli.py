@@ -9,6 +9,7 @@ from at_runtime.eval import run_minimal_eval
 from at_runtime.handoff import get_handoff
 from at_runtime.memory import read_memory, write_memory_structured
 from at_runtime.runner import run_doctor, run_task_flow
+from at_runtime.view import render_memory_tree
 from at_runtime.workspace import initialize_workspace
 
 
@@ -31,6 +32,9 @@ def main(argv: list[str] | None = None) -> int:
     write.add_argument("--project", default=None, help="project name for promote scope migration")
     get = memory_sub.add_parser("get", help="read structured memory entries (for agents)")
     get.add_argument("uri")
+    view = memory_sub.add_parser("view", help="show memory tree")
+    view.add_argument("--all", action="store_true",
+                      help="include archived/deprecated and expand short")
     context_parser = subparsers.add_parser("context", help="inspect context")
     context_sub = context_parser.add_subparsers(dest="context_command", required=True)
     context_inspect = context_sub.add_parser("inspect", help="build and show context bundle")
@@ -86,6 +90,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.memory_command == "get":
             entries = read_memory(root, args.uri)
             print(json.dumps(entries, ensure_ascii=False, indent=2))
+            return 0
+        if args.memory_command == "view":
+            print(render_memory_tree(root, include_all=args.all))
             return 0
     if args.command == "context":
         if args.context_command == "inspect":
