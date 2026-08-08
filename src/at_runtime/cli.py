@@ -15,6 +15,7 @@ from at_runtime.memory import (
     write_memory_structured,
 )
 from at_runtime.runner import run_doctor, run_task_flow
+from at_runtime.timeline import create_checkpoint, list_checkpoints, rollback_memory
 from at_runtime.view import render_memory_tree
 from at_runtime.workspace import initialize_workspace
 
@@ -49,6 +50,11 @@ def main(argv: list[str] | None = None) -> int:
     archive.add_argument("uri")
     discard = memory_sub.add_parser("discard", help="discard memory entry")
     discard.add_argument("uri")
+    checkpoint = memory_sub.add_parser("checkpoint", help="create memory checkpoint")
+    checkpoint.add_argument("label", help="checkpoint label")
+    memory_sub.add_parser("timeline", help="list checkpoints")
+    rollback = memory_sub.add_parser("rollback", help="rollback memory to checkpoint")
+    rollback.add_argument("node", help="checkpoint id (from timeline)")
     context_parser = subparsers.add_parser("context", help="inspect context")
     context_sub = context_parser.add_subparsers(dest="context_command", required=True)
     context_inspect = context_sub.add_parser("inspect", help="build and show context bundle")
@@ -118,6 +124,18 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.memory_command == "discard":
             result = discard_memory(root, args.uri)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.memory_command == "checkpoint":
+            result = create_checkpoint(root, args.label)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.memory_command == "timeline":
+            nodes = list_checkpoints(root)
+            print(json.dumps(nodes, ensure_ascii=False, indent=2))
+            return 0
+        if args.memory_command == "rollback":
+            result = rollback_memory(root, args.node)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
     if args.command == "context":
