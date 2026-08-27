@@ -1,0 +1,18 @@
+# 本地/个人设置
+.claude/
+*.local.json
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 临时文件
+*.tmp
+
+# 历史查验清单（工作草稿，不入库）
+xiaot-issues-review.md

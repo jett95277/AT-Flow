@@ -1,0 +1,35 @@
+{
+  "skill_name": "xiaot-memory-manage",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "整理一下我的记忆",
+      "expected_output": "扫描 short/medium/long 三层，输出每条记忆的 URI、状态、建议动作（promote/archive/discard/保留）和理由清单",
+      "expectations": [
+        "输出包含 at memory stats 的层统计",
+        "输出建议清单表格（URI | 状态 | 动作 | 理由）",
+        "未获用户确认前不执行任何 promote/archive/discard"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "把测试残留的记忆清掉",
+      "expected_output": "识别测试类记忆（如 test-audit、test01 相关），展示内容后建议 discard，用户确认后执行并展示 deprecated 结果",
+      "expectations": [
+        "discard 前展示该条完整内容",
+        "执行后展示 status: deprecated",
+        "清理动作完成后打 checkpoint"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "把有价值的会话结论升到任务层",
+      "expected_output": "识别 short 层有决策价值的结论，建议 promote --to medium，确认后执行",
+      "expectations": [
+        "建议 promote 时给出理由",
+        "执行 promote 后展示新状态",
+        "区分可提升与应保留/丢弃的记忆"
+      ]
+    }
+  ]
+}
