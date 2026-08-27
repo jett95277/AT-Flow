@@ -382,4 +382,4 @@ Announce document completion. Provide a few final tips:
 - 不要用本 skill 写非文档类内容（代码实现、日常对话）
 - 不要跳过 Context Gathering 直接输出文档；文档必须经过读者验证
 - 不要照搬英文模板结构而不适配中文场景
-- 产出物建议存入 docs/ 或专题 outputs/，并考虑 at memory 沉淀
+- 产出物建议存入 docs/ 或专题 outputs/，并考虑 xiaot-memory memory 沉淀

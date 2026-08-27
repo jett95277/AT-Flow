@@ -9,7 +9,7 @@ metadata:
 执行（统一环境，无需手动 cd）。每一步先解析环境：
 
 ```powershell
-# 小T 环境：XIAOT_HOME / ATCommand / ProjectRoot（~/.xiaot 由 sync-skills.ps1 部署）
+# 小T 环境：XIAOT_HOME / MemoryCmd / ProjectRoot（~/.xiaot 由 sync-skills.ps1 部署）
 . "$HOME\.xiaot\lib\xiaot-env.ps1"
 Set-Location $Xiaot.ProjectRoot
 ```
@@ -27,10 +27,10 @@ Set-Location $Xiaot.ProjectRoot
 ## 1. 任务定义（所有级别都写）
 
 ```powershell
-& $Xiaot.ATCommand memory add memory://task/<NNN>-<slug>/medium --conclusion "目标：…｜范围：…｜验收：…" [--constraint "<约束>"] --task <NNN>-<slug>
+& $Xiaot.MemoryCmd memory add memory://task/<NNN>-<slug>/medium --conclusion "目标：…｜范围：…｜验收：…" [--constraint "<约束>"] --task <NNN>-<slug>
 ```
 
-task-id 规则：`<3位序号>-<英文短横线>`（如 001-fix-beam），序号查 `at memory view`。
+task-id 规则：`<3位序号>-<英文短横线>`（如 001-fix-beam），序号查 `xiaot-memory memory view`。
 
 ## 2. 按级别执行
 
@@ -64,9 +64,9 @@ task-id 规则：`<3位序号>-<英文短横线>`（如 001-fix-beam），序号
 
 ```powershell
 # 沉淀当前阶段的 short（必须 --task）
-& $Xiaot.ATCommand memory add memory://session/<阶段>-<task-id>/short --conclusion "<结论>" [--constraint "<约束>"] [--unresolved "<未决>"] --task <task-id>
+& $Xiaot.MemoryCmd memory add memory://session/<阶段>-<task-id>/short --conclusion "<结论>" [--constraint "<约束>"] [--unresolved "<未决>"] --task <task-id>
 # 打点
-& $Xiaot.ATCommand memory checkpoint "<label>"
+& $Xiaot.MemoryCmd memory checkpoint "<label>"
 ```
 
 ## 5. 完成收尾：settle -> 确认 -> 晋升
@@ -74,22 +74,22 @@ task-id 规则：`<3位序号>-<英文短横线>`（如 001-fix-beam），序号
 任务收尾时跑结算（默认 dry-run，不写盘），按五行分类逐条确认：
 
 ```powershell
-& $Xiaot.ATCommand memory settle <task-id>
+& $Xiaot.MemoryCmd memory settle <task-id>
 ```
 
 - **keep**：保留不动。
 - **auto_archive**（纯过程记录）：确认后 `--apply` 自动归档。
 - **suggest_promote**（已验证 + 有证据）：逐条确认后用严格动词晋升，需重提炼文本 + 证据：
   ```powershell
-  & $Xiaot.ATCommand memory promote memory://session/<阶段>-<task-id>/short --to medium --confirmed --evidence "<证据，如 test:beam<2>" --distilled "<提炼后的结论，禁止复制原文>"
+  & $Xiaot.MemoryCmd memory promote memory://session/<阶段>-<task-id>/short --to medium --confirmed --evidence "<证据，如 test:beam<2>" --distilled "<提炼后的结论，禁止复制原文>"
   ```
 - **suggest_discard**（重复/无价值）：确认后丢弃：
   ```powershell
-  & $Xiaot.ATCommand memory settle <task-id> --confirmed --discard <entry-id>
+  & $Xiaot.MemoryCmd memory settle <task-id> --confirmed --discard <entry-id>
   ```
 - **conflict_candidates**：确认后标记冲突：
   ```powershell
-  & $Xiaot.ATCommand memory settle <task-id> --confirmed --conflict <entry-id>
+  & $Xiaot.MemoryCmd memory settle <task-id> --confirmed --conflict <entry-id>
   ```
 
 确认全部完成后才执行 apply（settle 的 promote/discard/conflict 一律需用户确认，绝不自动）。
@@ -100,7 +100,7 @@ task-id 规则：`<3位序号>-<英文短横线>`（如 001-fix-beam），序号
 后续会话恢复：
 
 ```powershell
-& $Xiaot.ATCommand memory get memory://task/<task-id>/medium
+& $Xiaot.MemoryCmd memory get memory://task/<task-id>/medium
 ```
 
 ## Anti-Patterns

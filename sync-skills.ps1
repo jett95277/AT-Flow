@@ -1,8 +1,9 @@
 ﻿# sync-skills.ps1 — 一键同步 xiaot\skills\* 到 Codex / OpenCode 宿主目录，
-# 同时确保 ~/.xiaot 安装根（lib + bin + config.json）存在。
+# 同时部署 ~/.xiaot 安装根（lib + lib\python\xiaot_memory + bin + config.json）。
 # 用法：pwsh xiaot\sync-skills.ps1（任意目录可运行；脚本内自定位源目录）
 # skill 内容本身可移植（自动定位仓库根），同步为纯复制，无需路径替换。
 #
+# v3.1 自包含：不再探测 at 二进制（记忆引擎内迁 xiaot_memory，部署 lib\python 快照）。
 # 孤儿清理保护：只清理"本次/上次由本脚本部署过"的 skill 目录（记录在目标目录
 # .xiaot-skills-manifest.json），绝不删除宿主中其他来源的 skill（如 Codex 官方
 # curated skills、插件安装的 skill）。
@@ -16,14 +17,27 @@ $homeRoot = Join-Path $env:USERPROFILE '.xiaot'
 $homeLib = Join-Path $homeRoot 'lib'
 $homeBin = Join-Path $homeRoot 'bin'
 $homeSkills = Join-Path $homeRoot 'skills'
-New-Item -ItemType Directory -Path $homeLib -Force | Out-Null
+$homePy = Join-Path $homeLib 'python'
+New-Item -ItemType Directory -Path $homePy -Force | Out-Null
 New-Item -ItemType Directory -Path $homeBin -Force | Out-Null
 New-Item -ItemType Directory -Path $homeSkills -Force | Out-Null
 
+# lib\xiaot-env.ps1
 $libSrc = Join-Path $PSScriptRoot 'lib\xiaot-env.ps1'
-$binSrc = Join-Path $PSScriptRoot 'bin\at.ps1'
 if (Test-Path $libSrc) { Copy-Item $libSrc (Join-Path $homeLib 'xiaot-env.ps1') -Force }
-if (Test-Path $binSrc) { Copy-Item $binSrc (Join-Path $homeBin 'at.ps1') -Force }
+
+# lib\python\xiaot_memory（记忆引擎快照）
+$pySrc = Join-Path $PSScriptRoot 'lib\python\xiaot_memory'
+if (Test-Path $pySrc) {
+  if (Test-Path (Join-Path $homePy 'xiaot_memory')) { Remove-Item (Join-Path $homePy 'xiaot_memory') -Recurse -Force }
+  Copy-Item $pySrc (Join-Path $homePy 'xiaot_memory') -Recurse
+}
+
+# bin\xiaot-memory.ps1（薄记忆命令），清理旧的 at.ps1
+$binSrc = Join-Path $PSScriptRoot 'bin\xiaot-memory.ps1'
+if (Test-Path $binSrc) { Copy-Item $binSrc (Join-Path $homeBin 'xiaot-memory.ps1') -Force }
+$oldAt = Join-Path $homeBin 'at.ps1'
+if (Test-Path $oldAt) { Remove-Item $oldAt -Force }
 foreach ($tool in @('doctor.ps1', 'tui.ps1')) {
   $toolSrc = Join-Path $PSScriptRoot $tool
   if (Test-Path $toolSrc) { Copy-Item $toolSrc (Join-Path $homeBin $tool) -Force }
@@ -34,21 +48,21 @@ if (Test-Path $src) {
   Copy-Item $src $homeSkills -Recurse
 }
 
-# config.json 首次写入：自动探测 at_command（AT_CMD -> xiaot 父目录 venv -> PATH），后续不覆盖
+# config.json 首次写入：探测带 PyYAML 的 python（XIAOT_PYTHON -> PATH python），后续不覆盖
 $userConfig = Join-Path $homeRoot 'config.json'
 if (-not (Test-Path $userConfig)) {
-  $at = $env:AT_CMD
-  if (-not $at) {
-    $cand = Join-Path (Split-Path $PSScriptRoot -Parent) '.venv\Scripts\at.exe'
-    if (Test-Path $cand) { $at = $cand }
+  function Test-PyYaml([string]$exe) {
+    if (-not $exe) { return $false }
+    try { & $exe -c "import yaml" 2>$null; return ($LASTEXITCODE -eq 0) } catch { return $false }
   }
-  if (-not $at) {
-    $cmd = Get-Command at.exe -ErrorAction SilentlyContinue
-    if ($cmd -and $cmd.Source -notlike "$env:WINDIR\*") { $at = $cmd.Source }
+  $py = $env:XIAOT_PYTHON
+  if (-not (Test-PyYaml $py)) {
+    $cmd = Get-Command python -ErrorAction SilentlyContinue
+    $py = if ($cmd -and (Test-PyYaml $cmd.Source)) { $cmd.Source } else { $null }
   }
-  @{ xiaot_home = ''; at_command = [string]$at; default_project = '' } |
+  @{ xiaot_home = ''; python = [string]$py; default_project = '' } |
     ConvertTo-Json | Set-Content $userConfig -Encoding UTF8
-  Write-Host "created $userConfig (at_command=$at)"
+  Write-Host "created $userConfig (python=$py)"
 }
 $targets = @(
   (Join-Path $env:USERPROFILE '.codex\skills'),
@@ -92,4 +106,4 @@ foreach ($t in $targets) {
 }
 
 $count = $sourceNames.Count
-Write-Host "Done. $count skills deployed to Codex + OpenCode (manifest protected)."
+Write-Host "Done. $count skills deployed to Codex + OpenCode; xiaot_memory deployed to ~/.xiaot/lib/python."

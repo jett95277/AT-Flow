@@ -6,7 +6,7 @@
       "prompt": "整理一下我的记忆",
       "expected_output": "扫描 short/medium/long 三层，输出每条记忆的 URI、状态、建议动作（promote/archive/discard/保留）和理由清单",
       "expectations": [
-        "输出包含 at memory stats 的层统计",
+        "输出包含 xiaot-memory memory stats 的层统计",
         "输出建议清单表格（URI | 状态 | 动作 | 理由）",
         "未获用户确认前不执行任何 promote/archive/discard"
       ]

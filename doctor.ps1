@@ -1,7 +1,7 @@
-﻿# xiaot\doctor.ps1 — 小T 路径诊断（v3.0：统一走 xiaot-env.ps1）
+﻿# xiaot\doctor.ps1 — 小T 路径诊断（v3.1 自包含）
 # 用法：powershell.exe -ExecutionPolicy Bypass -File xiaot\doctor.ps1（或 ~\.xiaot\bin\doctor.ps1）
-# 展示：XIAOT_HOME(来源) / ATCommand(来源) / ProjectRoot(来源) / 配置优先级 / skills 部署 / at doctor
-# 不再假定"xiaot 位于 AT-Flow 仓库下"，at 经 PATH / config 解析。
+# 展示：XIAOT_HOME(来源) / ProjectRoot(来源) / python+PyYAML(来源) / 记忆命令 / skills 部署 / 记忆自检
+# v3.1 起不再解析 at 二进制：记忆引擎内迁 xiaot_memory，doctor 做本机自检。
 
 $ErrorActionPreference = 'Continue'
 
@@ -15,11 +15,12 @@ if (Test-Path $envScript) { . $envScript } else {
 
 Write-Host "===== xiaot doctor ====="
 Write-Host ("XIAOT_HOME  : {0}  [{1}]" -f $Xiaot.XIAOT_HOME, $Xiaot.XIAOT_HOMESource)
-Write-Host ("ATCommand   : {0}  [{1}]" -f $Xiaot.ATCommand, $Xiaot.ATCommandSource)
 Write-Host ("ProjectRoot : {0}  [{1}]" -f $Xiaot.ProjectRoot, $Xiaot.ProjectRootSource)
+Write-Host ("PythonExe   : {0}  [{1}]" -f $Xiaot.PythonExe, $Xiaot.PythonSource)
+Write-Host ("MemoryCmd   : {0}" -f $Xiaot.MemoryCmd)
 Write-Host ("MEMORY_DIR  : {0}" -f (Join-Path $Xiaot.ProjectRoot '.agent'))
 Write-Host ""
-Write-Host "配置优先级：环境变量 AT_CMD -> 项目 .xiaot\config.json -> ~\.xiaot\config.json -> PATH"
+Write-Host "记忆引擎：xiaot_memory（内迁，不依赖 at 二进制）；配置无 at_command"
 
 # ---------- skills 部署状态 ----------
 Write-Host ""
@@ -37,18 +38,29 @@ if (Test-Path $src) {
   Write-Host "  skills 快照缺失：$src（先运行 sync-skills.ps1）"
 }
 
-# ---------- at doctor ----------
-if ($Xiaot.ATCommand -and (Test-Path $Xiaot.ATCommand)) {
-  Write-Host ""
-  Write-Host "at doctor："
-  Push-Location
-  Set-Location $Xiaot.ProjectRoot
-  & $Xiaot.ATCommand doctor 2>$null
-  Pop-Location
+# ---------- 记忆自检（本机，不依赖 at 二进制）----------
+Write-Host ""
+if (-not $Xiaot.PythonExe) {
+  Write-Host "记忆自检：跳过（python 无 PyYAML）"
 } else {
-  Write-Host ""
-  Write-Host "at doctor：跳过（AT 未找到）"
+  $agentDir = Join-Path $Xiaot.ProjectRoot '.agent'
+  if (-not (Test-Path $agentDir)) {
+    Write-Host "记忆自检：.agent 不存在（$agentDir）——先跑 sync-skills.ps1 或 xiaot-memory init"
+  } else {
+    $stats = $null
+    Push-Location
+    Set-Location $Xiaot.ProjectRoot
+    $env:PYTHONPATH = $Xiaot.PyModule
+    $stats = & $Xiaot.PythonExe -m xiaot_memory memory stats 2>$null | ConvertFrom-Json
+    Pop-Location
+    if ($stats) {
+      Write-Host ("记忆自检：OK  short={0} medium={1} long={2} total={3} checkpoints={4}" -f `
+        $stats.tiers.short.total, $stats.tiers.medium.total, $stats.tiers.long.total, $stats.total, $stats.checkpoints)
+    } else {
+      Write-Host "记忆自检：失败（memory stats 无输出）"
+    }
+  }
 }
 
 Write-Host ""
-Write-Host "路径来源：AT 命令 = env AT_CMD -> 项目 .xiaot/config.json -> ~/.xiaot/config.json -> PATH"
+Write-Host "环境：python = env XIAOT_PYTHON -> PATH python（需 PyYAML）；记忆引擎 = xiaot_memory"

@@ -79,4 +79,4 @@ To test/visualize the artifact, use available tools (including other Skills or b
 
 - 不要用本 skill 做简单单文件 HTML/JSX（官方明确不适合）
 - 不要生成后不检查 artifacts 可运行性
-- HTML 报告属于交付物，完成后建议 at memory checkpoint 打点
+- HTML 报告属于交付物，完成后建议 xiaot-memory memory checkpoint 打点

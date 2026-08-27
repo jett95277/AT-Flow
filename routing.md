@@ -32,5 +32,5 @@
 ## 原则
 
 - 路由只负责"派活"，不重复 skill 内部逻辑
-- 报告/文档类产出建议完成后 `at memory checkpoint` 打点
+- 报告/文档类产出建议完成后 `xiaot-memory memory checkpoint` 打点
 - 新 skill 引入后必须在本表登记触发词

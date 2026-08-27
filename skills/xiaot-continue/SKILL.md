@@ -9,11 +9,11 @@ metadata:
 执行（统一环境，无需手动 cd）：
 
 ```powershell
-# 小T 环境：XIAOT_HOME / ATCommand / ProjectRoot（~/.xiaot 由 sync-skills.ps1 部署）
+# 小T 环境：XIAOT_HOME / MemoryCmd / ProjectRoot（~/.xiaot 由 sync-skills.ps1 部署）
 . "$HOME\.xiaot\lib\xiaot-env.ps1"
 Set-Location $Xiaot.ProjectRoot
-& $Xiaot.ATCommand memory get memory://task/<task-id>/medium
-& $Xiaot.ATCommand memory timeline
+& $Xiaot.MemoryCmd memory get memory://task/<task-id>/medium
+& $Xiaot.MemoryCmd memory timeline
 ```
 
 ## 切换回复格式（固定模板）
@@ -31,7 +31,7 @@ Set-Location $Xiaot.ProjectRoot
 ## 规则
 
 - 只关注当前专题（规则 9）
-- 查询详情时按需读 `at memory get` 全量；摘要展示用上面的模板
+- 查询详情时按需读 `xiaot-memory memory get` 全量；摘要展示用上面的模板
 - 若 conclusion 是模板句式（目标/范围/验收），按字段拆分展示；旧任务自由文本则直接展示
 
 ## Anti-Patterns

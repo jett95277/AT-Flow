@@ -3,15 +3,17 @@
 > 基于 AGENTS.md + SKILL.md + AT CLI 的通用规则层，Codex / OpenCode 双生态可用。
 > 所有会话使用同一套规则。
 
-## 全局常量（v3.0：独立仓库，at 经 PATH / config 解析）
+## 全局常量（v3.1：完全自包含，记忆引擎内迁）
 
-xiaot 已是独立仓库；不假定任何 AT-Flow 目录结构。运行期统一由 `lib/xiaot-env.ps1` 解析：
+xiaot 是独立仓库，不假定任何 AT-Flow 目录结构，**不依赖 at 二进制**。
+运行期统一由 `lib/xiaot-env.ps1` 解析：
 
-- **XIAOT_HOME** = `~/.xiaot`（安装根：`lib/`、`bin/`、`skills/`、`config.json`；由 sync-skills.ps1 部署）
-- **ATCommand** = at 命令：环境变量 `AT_CMD` → 项目 `.xiaot/config.json` → `~/.xiaot/config.json` → PATH `at`
-- **ProjectRoot** = 当前项目根（向上找 `.agent` / `.xiaot`；at 以 cwd 定位 `.agent`）
-- **MEMORY_DIR** = `$ProjectRoot\.agent`（由 AT CLI 管理）
-- skill / doctor / tui 统一 dot-source `~/.xiaot/lib/xiaot-env.ps1`，命令一律 `& $Xiaot.ATCommand ...`
+- **XIAOT_HOME** = `~/.xiaot`（安装根：`lib/`、`lib/python/xiaot_memory/`、`bin/`、`skills/`、`config.json`；由 sync-skills.ps1 部署）
+- **PythonExe** = 带 PyYAML 的 python：环境变量 `XIAOT_PYTHON` → PATH `python`
+- **MemoryCmd** = 薄记忆命令入口：`bin/xiaot-memory.ps1`（仓库或部署版 `~/.xiaot/bin/`）
+- **ProjectRoot** = 当前项目根（向上找 `.agent` / `.xiaot`；记忆命令以 cwd 定位 `.agent`）
+- **MEMORY_DIR** = `$ProjectRoot\.agent`（由 xiaot_memory 管理）
+- skill / doctor / tui 统一 dot-source `~/.xiaot/lib/xiaot-env.ps1`，命令一律 `& $Xiaot.MemoryCmd memory ...`
   （不再硬编码 `.venv\Scripts\at.exe`，也不再向上找 `.agent` 定位 AT-Flow）
 
 ## Skill 同步约定
@@ -23,7 +25,8 @@ pwsh sync-skills.ps1     # 无 pwsh 时：powershell.exe -ExecutionPolicy Bypass
 ```
 
 同步到 Codex（`~\.codex\skills`）与 OpenCode（`~\.config\opencode\skills`），
-同时确保 `~/.xiaot` 安装根（lib + bin + skills + config.json）存在并写入首次探测的 at_command。
+同时部署 `~/.xiaot` 安装根（lib + lib\python\xiaot_memory + bin + skills + config.json），
+config.json 首次写入探测带 PyYAML 的 python。
 
 ## 核心规则（12 条）
 
@@ -81,16 +84,17 @@ pwsh sync-skills.ps1     # 无 pwsh 时：powershell.exe -ExecutionPolicy Bypass
 - 专题分支约定（可选）：`feat/<slug>` 或 `fix/<slug>`，完成后合回开发分支
 - 提交粒度：按专题/阶段分 commit，不混合多个专题（规则 9）
 
-## 记忆约定（复用 AT 记忆层，v3.0 严格动词）
+## 记忆约定（内迁 xiaot_memory，v3.1 严格动词）
 
 三层治理：short（临时，必绑 task）→ medium（需证据+重提炼+确认）→ long（需 verified + 项目归属）。
+命令统一走 `& $Xiaot.MemoryCmd memory <sub>`（等价 `python -m xiaot_memory memory <sub>`）。
 
-- 任务定义 → `at memory add memory://task/<NNN>-<id>/medium --conclusion "目标：…｜范围：…｜验收：…" --task <NNN>-<id>`（模板见 `templates/task-template.md`）
-- 阶段沉淀 → `at memory add memory://session/<阶段>-<id>/short --conclusion "<结论>" [--constraint "<约束>"] [--unresolved "<未决>"] --task <id>`（short **必须带 `--task`**，否则被准入拒绝）
-- 验证 → `at memory verify <uri> --evidence "<证据>"`（晋升 medium/long 前置）
-- 结算 → `at memory settle <task-id>`（默认 dry-run 输出保留/可归档/建议提升/建议 discard/冲突候选）
-- 晋升（人工确认，禁复制原文）→ `at memory promote <uri> --to medium --confirmed --evidence "<证据>" --distilled "<重新提炼的文本>"`
-- 查看 → `at memory view` / `at memory export` / `at memory context <uri>`
-- 审计 → `at memory events`
+- 任务定义 → `& $Xiaot.MemoryCmd memory add memory://task/<NNN>-<id>/medium --conclusion "目标：…｜范围：…｜验收：…" --task <NNN>-<id>`（模板见 `templates/task-template.md`）
+- 阶段沉淀 → `& $Xiaot.MemoryCmd memory add memory://session/<阶段>-<id>/short --conclusion "<结论>" [--constraint "<约束>"] [--unresolved "<未决>"] --task <id>`（short **必须带 `--task`**，否则被准入拒绝）
+- 验证 → `& $Xiaot.MemoryCmd memory verify <uri> --evidence "<证据>"`（晋升 medium/long 前置）
+- 结算 → `& $Xiaot.MemoryCmd memory settle <task-id>`（默认 dry-run 输出保留/可归档/建议提升/建议 discard/冲突候选）
+- 晋升（人工确认，禁复制原文）→ `& $Xiaot.MemoryCmd memory promote <uri> --to medium --confirmed --evidence "<证据>" --distilled "<重新提炼的文本>"`
+- 查看 → `& $Xiaot.MemoryCmd memory view` / `export` / `context <uri>`
+- 审计 → `& $Xiaot.MemoryCmd memory events`
 - **旧动词 `memory write/promote/archive/discard` 为 legacy 维护通道**，新内容一律走严格动词（避免绕过治理准入）
 - **串行约束**（issue-4）：记忆写入/promote/checkpoint 为 read-modify-write，当前无文件锁，**同一仓库根不得并行执行**（多会话按顺序串行调用）；存储已做原子写（临时文件 + rename）降低覆盖风险

@@ -1,26 +1,23 @@
-﻿# xiaot\lib\xiaot-env.ps1 — 小T 环境解析（定位层 B）
+﻿# xiaot\lib\xiaot-env.ps1 — 小T 环境解析（定位层 B，v3.1 自包含）
 #
 # dot-source 后导出 $Xiaot（Hashtable）：
 #   XIAOT_HOME   安装根：env XIAOT_HOME -> ~/.xiaot/config.json 的 xiaot_home -> ~/.xiaot
-#   ATCommand    at 命令：env AT_CMD -> 项目 .xiaot/config.json 的 at_command
-#                            -> ~/.xiaot/config.json 的 at_command -> PATH
 #   ProjectRoot  仓库根：cwd 向上找 .agent / .xiaot，找不到则用 cwd
+#   PyModule     xiaot_memory 模块目录（本 lib\python，仓库与部署版同构）
+#   PythonExe    带 PyYAML 的 python：env XIAOT_PYTHON -> PATH python（校验 import yaml）
+#   MemoryCmd    薄记忆命令入口：本仓 bin\xiaot-memory.ps1（或部署版 ~/.xiaot\bin\xiaot-memory.ps1）
 #   UserConfig   ~/.xiaot/config.json 路径
 #
-# 用途：skills / doctor.ps1 / tui.ps1 / bin\at.ps1 统一入口，
-# 消除 `.venv\Scripts\at.exe` 硬编码与"向上找 .agent"重复块。
+# 用途：skills / doctor.ps1 / tui.ps1 / bin\xiaot-memory.ps1 统一入口。
+# v3.1 起小T 完全自包含：记忆引擎内迁 xiaot_memory，不再解析 at 二进制。
 
-function Resolve-AtCommand {
-  param([string]$Value)
-  if (-not $Value) { return $null }
-  # 值是路径分隔符或 .exe 结尾 -> 视为路径
-  if ($Value -match '[/\\]' -or $Value -like '*.exe') {
-    if (Test-Path $Value) { return $Value }
-    return $null
-  }
-  $cmd = Get-Command $Value -ErrorAction SilentlyContinue
-  if ($cmd) { return $cmd.Source }
-  return $null
+function Test-PythonWithYaml {
+  param([string]$Exe)
+  if (-not $Exe) { return $false }
+  try {
+    & $Exe -c "import yaml" 2>$null
+    return ($LASTEXITCODE -eq 0)
+  } catch { return $false }
 }
 
 function Get-XiaotEnv {
@@ -51,37 +48,37 @@ function Get-XiaotEnv {
   }
   if (-not $homeVal) { $homeVal = Join-Path $env:USERPROFILE '.xiaot' }
 
-  # ---- ATCommand：env -> 项目 config -> 用户 config -> PATH ----
-  $at = $null
-  $atSource = 'PATH'
-  if ($env:AT_CMD) { $at = $env:AT_CMD; $atSource = '环境变量 AT_CMD' }
-  $projConfig = Join-Path $root '.xiaot\config.json'
-  if (-not $at -and (Test-Path $projConfig)) {
-    try { $at = (Get-Content $projConfig -Raw | ConvertFrom-Json).at_command; if ($at) { $atSource = '项目 .xiaot/config.json' } } catch { $at = $null }
+  # ---- PyModule：本 env 脚本旁的 lib\python（仓库与部署版同构）----
+  $pyModule = Join-Path $PSScriptRoot 'python'
+
+  # ---- PythonExe：env XIAOT_PYTHON -> PATH python，校验 PyYAML ----
+  $py = $null
+  $pySource = 'PATH python'
+  if ($env:XIAOT_PYTHON) { $py = $env:XIAOT_PYTHON; $pySource = '环境变量 XIAOT_PYTHON' }
+  if (-not $py) {
+    $cmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($cmd) { $py = $cmd.Source }
   }
-  if (-not $at -and (Test-Path $userConfig)) {
-    try { $at = (Get-Content $userConfig -Raw | ConvertFrom-Json).at_command; if ($at) { $atSource = '~/.xiaot/config.json' } } catch { $at = $null }
-  }
-  $atResolved = Resolve-AtCommand $at
-  if (-not $atResolved -and $at) {
-    $atResolved = $at  # 保留原始值，供报错展示
-    $atSource = "$atSource（未解析到可执行文件）"
-  }
-  if (-not $atResolved) {
-    # PATH 兜底（排除 Windows 系统 at.exe 调度器误命中）
-    $cmd = Get-Command at.exe -ErrorAction SilentlyContinue
-    if ($cmd -and $cmd.Source -notlike "$env:WINDIR\*") { $atResolved = $cmd.Source; $atSource = 'PATH' }
+  if ($py -and -not (Test-PythonWithYaml $py)) {
+    $pySource = "$pySource（无 PyYAML，pip install pyyaml 后重试）"
+    $py = $null
   }
 
+  # ---- MemoryCmd：本仓/部署版 bin\xiaot-memory.ps1 ----
+  $memoryCmd = Join-Path (Split-Path $PSScriptRoot -Parent) 'bin\xiaot-memory.ps1'
+  if (-not (Test-Path $memoryCmd)) { $memoryCmd = $null }
+
   $global:Xiaot = @{
-    XIAOT_HOME       = $homeVal
-    XIAOT_HOMESource = $homeSource
-    ATCommand        = $atResolved
-    ATCommandSource  = $atSource
-    ProjectRoot      = $root
+    XIAOT_HOME        = $homeVal
+    XIAOT_HOMESource  = $homeSource
+    ProjectRoot       = $root
     ProjectRootSource = $rootSource
-    UserConfig       = $userConfig
-    ProjConfig       = $projConfig
+    PyModule          = $pyModule
+    PythonExe         = $py
+    PythonSource      = $pySource
+    MemoryCmd         = $memoryCmd
+    UserConfig        = $userConfig
+    ProjConfig        = Join-Path $root '.xiaot\config.json'
   }
   return $global:Xiaot
 }

@@ -9,7 +9,7 @@ metadata:
 执行（统一环境，无需手动 cd）：
 
 ```powershell
-# 小T 环境：XIAOT_HOME / ATCommand / ProjectRoot（~/.xiaot 由 sync-skills.ps1 部署）
+# 小T 环境：XIAOT_HOME / MemoryCmd / ProjectRoot（~/.xiaot 由 sync-skills.ps1 部署）
 . "$HOME\.xiaot\lib\xiaot-env.ps1"
 Set-Location $Xiaot.ProjectRoot
 ```
@@ -19,10 +19,10 @@ Set-Location $Xiaot.ProjectRoot
 ### 1. 扫描（全量拉出三层 + 每 task 结算建议）
 
 ```powershell
-& $Xiaot.ATCommand memory stats
-& $Xiaot.ATCommand memory view
+& $Xiaot.MemoryCmd memory stats
+& $Xiaot.MemoryCmd memory view
 # 对每个 task 跑结算（默认 dry-run，不写盘），聚合分类建议
-& $Xiaot.ATCommand memory settle <task-id>
+& $Xiaot.MemoryCmd memory settle <task-id>
 ```
 
 ### 2. 分类建议（逐条给出动作 + 理由）
@@ -41,15 +41,15 @@ Set-Location $Xiaot.ProjectRoot
 
 ```powershell
 # 提升（short → medium / medium → long）：严格动词，需确认 + 证据 + 重提炼
-& $Xiaot.ATCommand memory promote memory://session/<id>/short --to medium --confirmed --evidence "<证据>" --distilled "<提炼文本>"
-& $Xiaot.ATCommand memory promote memory://task/<id>/medium --to long --confirmed --evidence "<证据>" --distilled "<提炼文本>"
+& $Xiaot.MemoryCmd memory promote memory://session/<id>/short --to medium --confirmed --evidence "<证据>" --distilled "<提炼文本>"
+& $Xiaot.MemoryCmd memory promote memory://task/<id>/medium --to long --confirmed --evidence "<证据>" --distilled "<提炼文本>"
 
 # 纯过程记录自动归档
-& $Xiaot.ATCommand memory settle <task-id> --apply
+& $Xiaot.MemoryCmd memory settle <task-id> --apply
 
 # 弃用 / 冲突：确认后按 id 处理
-& $Xiaot.ATCommand memory settle <task-id> --confirmed --discard <entry-id>
-& $Xiaot.ATCommand memory settle <task-id> --confirmed --conflict <entry-id>
+& $Xiaot.MemoryCmd memory settle <task-id> --confirmed --discard <entry-id>
+& $Xiaot.MemoryCmd memory settle <task-id> --confirmed --conflict <entry-id>
 ```
 
 - 每执行一条就展示结果，等大哥点头再下一条
@@ -58,7 +58,7 @@ Set-Location $Xiaot.ProjectRoot
 ### 4. 收尾打点留痕
 
 ```powershell
-& $Xiaot.ATCommand memory checkpoint "memory-maintenance-<YYYYMMDD>"
+& $Xiaot.MemoryCmd memory checkpoint "memory-maintenance-<YYYYMMDD>"
 ```
 
 汇报：`本次整理：提升 X 条、归档 Y 条、丢弃 Z 条，已打点`。

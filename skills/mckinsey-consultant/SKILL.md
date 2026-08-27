@@ -769,4 +769,4 @@ file_read(excel-data-spec.md)  # 按需加载
 
 - 不要用顾问模板处理纯技术实现类任务（属于研发人设）
 - 数据引用必须标注来源（违反规则 11 的推测不得入报告）
-- 报告/PPT 产出完成建议 at memory checkpoint 打点
+- 报告/PPT 产出完成建议 xiaot-memory memory checkpoint 打点

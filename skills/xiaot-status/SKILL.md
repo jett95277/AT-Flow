@@ -1,6 +1,6 @@
 ---
 name: 'xiaot-status'
-description: '查看 xiaot / AT 状态面板（记忆层、专题、时间线、skills 部署、健康检查）。使用当用户说"查看状态 / 状态 / tui / dashboard / 面板"时。运行 tui.ps1 输出状态。'
+description: '查看 xiaot 状态面板（记忆层、专题、时间线、skills 部署）。使用当用户说"查看状态 / 状态 / tui / dashboard / 面板"时。运行 tui.ps1 输出状态。'
 metadata:
   domain: 'status'
   source: 'manual'
@@ -9,7 +9,7 @@ metadata:
 执行（统一环境，无需手动 cd）：
 
 ```powershell
-# 小T 环境：XIAOT_HOME / ATCommand / ProjectRoot（~/.xiaot 由 sync-skills.ps1 部署）
+# 小T 环境：XIAOT_HOME / MemoryCmd / ProjectRoot（~/.xiaot 由 sync-skills.ps1 部署）
 . "$HOME\.xiaot\lib\xiaot-env.ps1"
 Set-Location $Xiaot.ProjectRoot
 ```

@@ -16,3 +16,6 @@ __pycache__/
 
 # 历史查验清单（工作草稿，不入库）
 xiaot-issues-review.md
+
+# 记忆数据（本地保留，不入库）
+.agent/

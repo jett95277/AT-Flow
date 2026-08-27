@@ -1,8 +1,8 @@
-﻿# xiaot\tui.ps1 — xiaot 状态面板（TUI，v3.0：统一走 xiaot-env.ps1）
+﻿# xiaot\tui.ps1 — xiaot 状态面板（TUI，v3.1 自包含：统一走 xiaot-env.ps1）
 # 用法：
 #   pwsh xiaot\tui.ps1               # 交互式全屏（r=刷新 q=退出）
 #   pwsh xiaot\tui.ps1 -Mode text    # 文本面板（供 coding agent 对话内展示）
-# 零依赖：PowerShell 7 + ANSI + at.exe JSON 输出
+# 零依赖：PowerShell 7 + ANSI + xiaot_memory JSON 输出
 
 param(
   [ValidateSet('text', 'interactive')]
@@ -18,9 +18,9 @@ if (Test-Path $envScript) { . $envScript } else {
 }
 
 $root = $Xiaot.ProjectRoot
-$at = $Xiaot.ATCommand
-if (-not $at) { Write-Host "ERROR: at 命令未找到（AT_CMD / ~/.xiaot/config.json / PATH）" -ForegroundColor Red; exit 1 }
-# at.exe 以 cwd 定位 .agent，必须切换到仓库根
+$mem = $Xiaot.MemoryCmd
+if (-not $mem) { Write-Host "ERROR: 记忆命令未找到（bin\xiaot-memory.ps1）" -ForegroundColor Red; exit 1 }
+# xiaot_memory 以 cwd 定位 .agent，必须切换到仓库根
 Set-Location $root
 $xhome = $Xiaot.XIAOT_HOME
 $skillsDir = Join-Path $xhome 'skills'
@@ -35,11 +35,10 @@ $C = @{
 }
 
 # ---------- 数据采集 ----------
-function Get-Stats { try { & $at memory stats 2>$null | ConvertFrom-Json } catch { $null } }
-function Get-Timeline { try { & $at memory timeline 2>$null | ConvertFrom-Json } catch { $null } }
-function Get-Doctor { try { & $at doctor 2>$null | ConvertFrom-Json } catch { $null } }
+function Get-Stats { try { & $mem memory stats 2>$null | ConvertFrom-Json } catch { $null } }
+function Get-Timeline { try { & $mem memory timeline 2>$null | ConvertFrom-Json } catch { $null } }
 function Get-TaskIds {
-  $view = & $at memory view 2>$null
+  $view = & $mem memory view 2>$null
   $ids = @()
   if ($view) { $view | Select-String -Pattern 'task-([A-Za-z0-9\-]+)' -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $ids += $_.Groups[1].Value } }
   $ids | Sort-Object -Unique
@@ -47,13 +46,12 @@ function Get-TaskIds {
 
 # ---------- 渲染：文本模式（对话内展示） ----------
 function Show-Text {
-  $stats = Get-Stats; $tl = Get-Timeline; $doc = Get-Doctor; $tasks = Get-TaskIds
+  $stats = Get-Stats; $tl = Get-Timeline; $tasks = Get-TaskIds
   $skills = Get-ChildItem $skillsDir -Directory | Select-Object -ExpandProperty Name
 
   Write-Host ""
   Write-Host "===== xiaot 状态面板 ====="
   Write-Host "ProjectRoot : $root"
-  if ($doc) { Write-Host ("健康    : {0}" -f $(if ($doc.ok) { 'OK' } else { '异常' })) }
   if ($stats) {
     Write-Host ("记忆    : short={0} medium={1} long={2} (total={3})" -f `
       $stats.tiers.short.total, $stats.tiers.medium.total, $stats.tiers.long.total, $stats.total)
@@ -75,22 +73,12 @@ function Show-Text {
 # ---------- 渲染：交互模式 ----------
 function Show-Interactive {
   Clear-Host
-  $stats = Get-Stats; $tl = Get-Timeline; $doc = Get-Doctor; $tasks = Get-TaskIds
+  $stats = Get-Stats; $tl = Get-Timeline; $tasks = Get-TaskIds
   $skills = Get-ChildItem $skillsDir -Directory | Select-Object -ExpandProperty Name
   $hosts = @("$env:USERPROFILE\.codex\skills", "$env:USERPROFILE\.config\opencode\skills")
 
   Write-Host ("{0}{1}  xiaot 状态面板  {2}" -f $C.bgdark, $C.bold, $C.reset)
   Write-Host ("{0}{1}ProjectRoot:{2} {3}" -f $C.dim, $C.cyan, $C.reset, $root)
-  Write-Host ""
-
-  # 健康
-  Write-Host ("{0}{1} 健康检查{2}" -f $C.bold, $C.green, $C.reset)
-  if ($doc) {
-    $doc.checks | ForEach-Object {
-      $mark = if ($_.ok) { "$($C.green)✓$($C.reset)" } else { "$($C.red)✗$($C.reset)" }
-      Write-Host ("  {0} {1}" -f $mark, $_.name)
-    }
-  }
   Write-Host ""
 
   # 记忆
