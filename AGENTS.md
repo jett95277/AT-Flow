@@ -13,6 +13,7 @@ xiaot 是独立仓库，不假定任何 AT-Flow 目录结构，**不依赖 at �
 - **MemoryCmd** = 薄记忆命令入口：`bin/xiaot-memory.ps1`（仓库或部署版 `~/.xiaot/bin/`）
 - **ProjectRoot** = 当前项目根（向上找 `.agent` / `.xiaot`；记忆命令以 cwd 定位 `.agent`）
 - **MEMORY_DIR** = `$ProjectRoot\.agent`（由 xiaot_memory 管理）
+- **ProjectName** = `$ProjectRoot\.xiaot\project.json`（由 `xiaot init` 固化；`xiaot task` 等的 `--project` 缺省回落此名——跨会话记忆注入依赖同一项目名，勿自造变体）
 - skill / doctor / tui 统一 dot-source `~/.xiaot/lib/xiaot-env.ps1`，命令一律 `& $Xiaot.MemoryCmd memory ...`
   （不再硬编码 `.venv\Scripts\at.exe`，也不再向上找 `.agent` 定位 AT-Flow）
 

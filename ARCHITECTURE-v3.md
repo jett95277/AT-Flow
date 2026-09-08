@@ -2,6 +2,14 @@
 
 > 状态：**MVP 基线已收敛**（经核验 G1-G7 补强 + O1-O6 决策）；据此进入 MVP 构建，定稿前大改动须回本文档。
 > 构建原则：**能复用现有内容优先复用**；能复用 spec-driven 架构设计就复用。
+>
+> ⚠️ **历史蓝图注记**：§9 模块落点树 / §14 复用映射 / G5-G6 中的模块名（`xiaot_orch/`、
+> `plan_store.py`、`context_builder.py`、`runtime.py`、`result_processor.py`、`cli_main.py`）
+> 为 v3.0 定稿时的设计名。v3.1 分层落地后实盘位于 `lib/python/xiaot/`：
+> `plan_store→workspace`、`context_builder→commands.build_context`（经 orchestrator 的
+> ContextBuilder 端口）、`runtime→ports.RuntimeAdapter`（保留为契约，执行在 agent 会话内）、
+> `result_processor→memory_service.settle/confirm`、`cli_main→cli.py`。**以 README 目录树与
+> `lib/python/xiaot/*.py` 实盘为准。**
 
 ---
 

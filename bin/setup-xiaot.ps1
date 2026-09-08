@@ -1,4 +1,4 @@
-# xiaot\setup-xiaot.ps1 — 一键部署编排 CLI（P0-1）
+﻿# xiaot\setup-xiaot.ps1 — 一键部署编排 CLI（P0-1）
 # 作用：把 xiaot\bin 加入用户 PATH（永久），自检 xiaot 可用。
 # 用法：powershell -ExecutionPolicy Bypass -File xiaot\setup-xiaot.ps1
 # 完成后新开终端执行 `xiaot init` 初始化项目。

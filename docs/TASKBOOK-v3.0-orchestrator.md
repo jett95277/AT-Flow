@@ -5,6 +5,11 @@
 **Spec 工作区**：`openspec/changes/v3-orchestrator-mvp/`（proposal/specs/design/tasks，演进中）
 **对外口径**：复用开源 spec-driven 工作流（内部实现）；xiaot 定位为"agent 上层编排平台"
 
+> 📌 **历史任务书**：本文为 v3.0 规划期文档。v3.1 分层落地后模块名有演进
+> （`context_builder` 并入 `commands.build_context`、`plan_store`→`workspace`、
+> `cli_main`→`cli.py` 等，见 `ARCHITECTURE-v3.md` 顶部注记）。实施以
+> `lib/python/xiaot/*.py` 实盘为准。
+
 ---
 
 ## 0. 定位（一句话）

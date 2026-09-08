@@ -34,7 +34,8 @@ pwsh sync-skills.ps1
 效果：
 - `skills\` 下 **13 个 skill** 部署到 Codex（`~\.codex\skills\`）与 OpenCode（`~\.config\opencode\skills\`），带 manifest 保护
 - 初始化 `~/.xiaot\`：`lib\xiaot-env.ps1`、`lib\python\xiaot_memory\`（记忆引擎快照）、`bin\xiaot-memory.ps1`、`bin\doctor.ps1`、`bin\tui.ps1`、`skills\` 快照、`config.json`（首次探测带 PyYAML 的 python）
-- 若本机已装 AT-Flow 的 at 二进制，可清理 `~/.xiaot/config.json` 的 `at_command` 残留（小T 已不使用）
+- 若本机已装 AT-Flow 的 at 二进制，可清理 `~/.xiaot/config.json` 的 `at_command` 残留（小T 已不使用）：
+  `powershell -Command "(Get-Content ~\.xiaot\config.json -Raw | ConvertFrom-Json) | ForEach-Object { $_.PSObject.Properties.Remove('at_command'); $_ } | ConvertTo-Json | Set-Content ~\.xiaot\config.json -Encoding UTF8"`
 
 ### 3. 验证
 
@@ -87,7 +88,7 @@ pwsh ~\.xiaot\bin\xiaot-memory.ps1 memory view
 pwsh sync-skills.ps1
 ```
 
-## 任务编排 CLI（v3.0）部署
+## 任务编排 CLI（v3.1）部署
 
 编排包在 `lib/python/xiaot/`（与 xiaot_memory 并列）。部署与使用：
 
@@ -96,11 +97,19 @@ pwsh sync-skills.ps1
 powershell -ExecutionPolicy Bypass -File xiaot\bin\setup-xiaot.ps1
 
 # 2) 在目标项目初始化（建 .xiaot 工作区 + 注入 .opencode 编排命令/skill）
-xiaot init --dir <项目>
+#    并把"规范项目名"固化为 .xiaot/project.json（缺省 = 项目目录名；
+#    可用 --project <name> 覆盖）
+xiaot init --dir <项目> [--project <规范名>]
 
 # 3) 编排任务（详见 README「任务编排 CLI」节）
-xiaot task "开发任务" --project X
+#    --project 缺省时自动用 init 固化的规范名——跨会话记忆注入依赖
+#    同一项目名，勿在不同会话自造变体名
+xiaot task "开发任务"            # project 取固化名（或显式 --project X）
 ```
+
+> 项目名纪律：`task`/`settle`/`confirm` 的 `--project` 缺省统一回落
+> `.xiaot/project.json` 的固化名（显式传值仍优先）。若需换名，
+> 重新 `xiaot init --project <新名>` 覆盖即可（旧名记忆不会自动迁移）。
 
 ## 常用运维
 
@@ -130,4 +139,4 @@ xiaot task "开发任务" --project X
 - skill 内容全部走 `~/.xiaot/lib/xiaot-env.ps1` 解析环境（XIAOT_HOME / ProjectRoot / PythonExe / MemoryCmd），不依赖 workdir、不硬编码 `.venv\Scripts\at.exe`
 - 记忆引擎 `xiaot_memory` 仅依赖 Python 标准库 + PyYAML，与 AT-Flow 完全解耦
 - 仓库内 4 个社区引入 skill 已适配：中文触发词 + metadata(domain/source) + Anti-Patterns
-- 所有外部 skill 许可：MIT / Apache 2.0 / 官方，见各目录 LICENSE 与 `skills-bundle` MANIFEST
+- 所有外部 skill 许可：MIT / Apache 2.0 / 官方，见各目录 LICENSE

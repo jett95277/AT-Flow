@@ -84,7 +84,9 @@ function Get-XiaotEnv {
     PythonSource      = $pySource
     MemoryCmd         = $memoryCmd
     UserConfig        = $userConfig
-    ProjConfig        = Join-Path $root '.xiaot\config.json'
+    # 项目级编排配置（规范 project 名）由 xiaot init 写入 .xiaot/project.json，
+    # Python 侧 workspace.read_project_name 读取；PS 侧不需要（保留指引勿删）。
+    ProjConfig        = Join-Path $root '.xiaot\project.json'
   }
   return $global:Xiaot
 }

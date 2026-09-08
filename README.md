@@ -1,6 +1,6 @@
 # 小T（Xiaot）
 
-**Codex / OpenCode 通用的个人 AI 助手系统（v3.0：记忆引擎内迁 + 任务编排 Orchestrator MVP）。**
+**Codex / OpenCode 通用的个人 AI 助手系统（v3.1 自包含：记忆引擎内迁 + 任务编排层）。**
 >claude没顺手改是因为目前在家里用codex比较多，在公司用opencode，后期顺手加上claude，或者说使用者稍微写一段prompt就能适配
 
 小T不是产品，不做面向用户的多余内容。系统要能跑、
@@ -48,13 +48,53 @@ spec-driven 设计）：注入 Coding Agent（opencode 等），开发任务先�
 | 规则层 | `AGENTS.md` | 12 条规则 + 权限管理 + Git 工作流 |
 | 定位层 | `lib/xiaot-env.ps1` + `bin/xiaot-memory.ps1` | 统一解析 XIAOT_HOME / ProjectRoot / python / 记忆命令 |
 | 记忆层 | `lib/python/xiaot_memory/` | 内迁记忆引擎（三层记忆 + 治理层，复用 AT 语义） |
-| 编排层 | `lib/python/xiaot/`（v3.0） | 任务编排 CLI：task/retrieve/settle/confirm/checkpoint/inject（对齐 spec-driven） |
+| 编排层 | `lib/python/xiaot/`（v3.1 分层） | 任务编排 CLI：task/retrieve/plan/settle/confirm/checkpoint/timeline/rollback/init/inject（对齐 spec-driven） |
 | 人设层 | `personas/*.md` | 全局/研发/产品三模式（charter 化） |
 | SOP 层 | `skills/`（13 个 skill） | 自有 7 个 + 现成引入 6 个 |
 | 路由层 | `routing.md` | 触发词→skill 路由 + 降级规则 |
 | 模板层 | `templates/task-template.md` | 专题结构模板（序号化 + 目标/范围/验收） |
 | 会话层 | `xiaot-memory memory checkpoint` | 记忆层生命线 |
 | 启动层 | `xiaot-continue` skill | 按需恢复，不自动注入 |
+                 用户任务（在 agent 会话里）
+                        │
+                        ▼
+        ┌───────────────────────────────────┐
+        │     xiaot 编排层（Orchestrator）      │
+        │  理解任务 → 调度 → 组装 → 收口        │
+        └──┬──────────┬──────────┬──────────┘
+           │          │          │
+       【同级】    【同级】     【同级】
+           ▼          ▼          ▼
+   ┌────────────┐ ┌──────────┐ ┌────────────┐
+   │ 记忆能力     │ │ 技能能力  │ │ 规范能力     │
+   │ Memory      │ │ Skill     │ │ Spec        │
+   │            │ │          │ │            │
+   │ xiaot_memory│ │ skills/13 │ │ 复用 spec-  │
+   │ 三层(验证结论)│ │ 指引路由   │ │ driven 工作流│
+   │            │ │          │ │            │
+   │ A模型/治理   │ │ 双入口    │ │ 大任务分支   │
+   └──────┬─────┘ └────┬─────┘ └──────┬─────┘
+          │           │              │
+          └───────────┴──────┬───────┘
+                             │  编排层汇聚三者产物
+                             ▼
+              ┌─────────────────────────────┐
+              │ Context 组装（ContextPack）    │
+              │ 指令 + 记忆摘要 + 技能要点 +   │
+              │ spec 路径（引用式、预算受限）    │
+              └──────────────┬──────────────┘
+                             ▼
+                注入 Coding Agent（当前会话）
+                             │ 执行
+                             ▼
+                        Result
+                             │
+                             ▼
+             编排层收口：settle(建议) → confirm(人工)
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+          记忆(medium/long) 工作区(产物)   时间线(节点)
 
 ## 目录结构
 
@@ -68,13 +108,13 @@ xiaot/
 ├── tui.ps1                 # 状态面板（交互 + text 双模式）
 ├── doctor.ps1              # 路径诊断（python + 记忆自检 + skills 部署）
 ├── openspec/               # spec-driven 工作区（specs=真相对外文档；changes/archive=演进历史）
-├── tests/                  # 130 单测（记忆引擎 + 编排层）
+├── tests/                  # 155 单测（记忆引擎 + 编排层）
 ├── lib/
 │   ├── xiaot-env.ps1       # 定位层：导出 $Xiaot（MemoryCmd / PythonExe / ProjectRoot）
 │   └── python/
 │       ├── xiaot_memory/   # 记忆引擎（内迁：memory/policy/settle/context/events/timeline/view）
-│       └── xiaot/          # 编排层（v3.0）：models/workspace/memory_service/skill_router/
-│                           #   spec_router/spec_adapter/context/commands/timeline/inject/cli
+│       └── xiaot/          # 编排层：models/ports/orchestrator/workspace/memory_service/
+│                           #   skill_router/spec_router/spec_adapter/commands/timeline/inject/cli
 ├── bin/
 │   ├── xiaot-memory.ps1    # 薄记忆命令入口（python -m xiaot_memory）
 │   ├── xiaot.ps1 / xiaot.cmd  # 编排 CLI 入口（python -m xiaot，PATH 可调）
@@ -155,9 +195,9 @@ medium（需证据 + 重提炼 + 确认）→ long（需 verified + 项目归属
 
 short 无 `--task`、medium 缺证据/未提炼/未确认、技术事实直写 long，都会被准入规则拒绝。
 
-## 任务编排 CLI（v3.0，Orchestrator MVP）
+## 任务编排 CLI（v3.1，Orchestrator + 分层）
 
-xiaot 在记忆层之上新增**任务编排层**：面向 Coding Agent 的编排 CLI（对齐 spec-driven 设计），带记忆开工、留记忆收工。详见 `docs/TASKBOOK-v3.0-orchestrator.md` 与 `ARCHITECTURE-v3.md`。
+xiaot 在记忆层之上新增**任务编排层**：面向 Coding Agent 的编排 CLI（对齐 spec-driven 设计），带记忆开工、留记忆收工。分层：`commands`（薄）→ `orchestrator`（核心，注入端口）→ `ports`（契约），记忆/技能/规范为同级能力。详见 `docs/TASKBOOK-v3.0-orchestrator.md` 与 `ARCHITECTURE-v3.md`。
 
 ### 快速开始
 
@@ -165,14 +205,19 @@ xiaot 在记忆层之上新增**任务编排层**：面向 Coding Agent 的编�
 # 1) 部署：加入 PATH（新终端生效）
 powershell -ExecutionPolicy Bypass -File xiaot\bin\setup-xiaot.ps1
 
-# 2) 项目初始化（建 .xiaot 工作区 + 注入 .opencode 编排命令/skill）
-xiaot init --dir <项目路径>
+# 2) 项目初始化：建 .xiaot 工作区 + 注入 .opencode 编排命令/skill
+#    并把"规范项目名"固化为 .xiaot/project.json（缺省 = 项目目录名）
+xiaot init --dir <项目路径> [--project <规范名>]
 
 # 3) 编排任务（agent 会话内，按 xiaot-orchestrate skill 自动走）
-xiaot task "开发任务描述" --project X      # 带记忆开工，返回 context 片段
+#    --project 缺省自动回落 init 固化名——跨会话记忆注入依赖同一项目名
+xiaot task "开发任务描述"                # 带记忆开工，返回 context 片段
 xiaot settle <task_id> --status success --output "<做了什么>" --text "<候选结论>"   # 收工沉淀建议
-xiaot confirm "<结论>" --scope project --project X --evidence "<证据>"  # 人工确认写入 medium
+xiaot confirm "<结论>" --scope project --evidence "<证据>"     # 人工确认写入 medium（project 取固化名）
 ```
+
+> 项目名纪律：`task`/`settle`/`confirm` 的 `--project` 缺省统一回落
+> `.xiaot/project.json`（显式传值优先）。会话内勿自造变体名，否则记忆互相看不见。
 
 ### 命令一览
 
