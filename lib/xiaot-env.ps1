@@ -21,12 +21,18 @@ function Test-PythonWithYaml {
 }
 
 function Get-XiaotEnv {
-  # ---- ProjectRoot：cwd 向上找 .agent / .xiaot ----
+  # ---- ProjectRoot：cwd 向上找项目标记 ----
+  # 项目标记 = .agent（记忆库）或含 workspace/ 的 .xiaot（编排工作区）。
+  # 用户级部署根 ~/.xiaot（bin/lib/skills，无 workspace）不是项目根，避免误判。
   $p = (Get-Location).Path
   $root = $null
   $rootSource = 'cwd'
   while ($p) {
-    if ((Test-Path (Join-Path $p '.agent')) -or (Test-Path (Join-Path $p '.xiaot'))) {
+    $hasAgent = Test-Path (Join-Path $p '.agent')
+    $projXiaot = Join-Path $p '.xiaot'
+    $hasWorkspace = (Test-Path $projXiaot) -and (Test-Path (Join-Path $projXiaot 'workspace'))
+    $isHome = $p -eq $env:USERPROFILE
+    if (($hasAgent -or $hasWorkspace) -and -not $isHome) {
       $root = $p
       $rootSource = "向上找到 $p"
       break
@@ -35,7 +41,7 @@ function Get-XiaotEnv {
     if ($parent -eq $p) { break }
     $p = $parent
   }
-  if (-not $root) { $root = (Get-Location).Path; $rootSource = 'cwd（未找到 .agent/.xiaot）' }
+  if (-not $root) { $root = (Get-Location).Path; $rootSource = 'cwd（未找到 .agent/.xiaot-workspace）' }
 
   # ---- XIAOT_HOME ----
   # 注意：$HOME 是 PS 内置只读变量，这里用 $homeVal 避免同名冲突。
