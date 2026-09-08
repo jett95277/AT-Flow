@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 
@@ -38,7 +37,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_set = sub.add_parser("settle", help="end-of-task settle suggestions")
     p_set.add_argument("task_id")
-    p_set.add_argument("--status", default="success")
+    p_set.add_argument("--status",
+                       choices=["success", "failed", "cancelled", "partial"],
+                       default="success")
     p_set.add_argument("--output", default="")
     p_set.add_argument("--text", action="append", default=None,
                        help="candidate conclusion text (repeatable)")
@@ -58,6 +59,8 @@ def main(argv: list[str] | None = None) -> int:
     p_init = sub.add_parser("init", help="one-command project init (.xiaot + inject)")
     p_init.add_argument("--dir", default=None, help="project root to initialize")
     p_init.add_argument("--agent", default="opencode")
+    p_init.add_argument("--project", default=None,
+                        help="canonical project name (default: project dir name)")
 
     p_cf = sub.add_parser("confirm", help="human-approved promotion into medium memory")
     p_cf.add_argument("text", help="conclusion text to persist")
@@ -69,41 +72,48 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     from xiaot import commands
 
-    if args.cmd == "task":
-        result = commands.task(args.prompt, project=args.project,
-                               session=args.session, resume=args.resume)
-    elif args.cmd == "retrieve":
-        result = commands.retrieve(args.prompt, project=args.project,
-                                   session=args.session)
-    elif args.cmd == "plan":
-        result = commands.plan(args.prompt, project=args.project,
-                               steps=args.steps, acceptance=args.acceptance)
-    elif args.cmd == "settle":
-        candidates = [{"text": t} for t in args.text] if args.text else None
-        result = commands.settle(args.task_id, status=args.status,
-                                 output=args.output, candidates=candidates)
-    elif args.cmd == "checkpoint":
-        from xiaot import timeline
-        result = timeline.checkpoint(commands._resolve_root(), args.task_id,
-                                     label=args.label)
-    elif args.cmd == "timeline":
-        from xiaot import timeline
-        result = {"nodes": timeline.list_nodes(commands._resolve_root())}
-    elif args.cmd == "rollback":
-        from xiaot import timeline
-        result = timeline.rollback(commands._resolve_root(), args.node_id)
-    elif args.cmd == "inject":
-        from xiaot import inject
-        target = Path(args.dir) if args.dir else commands._resolve_root()
-        result = inject.generate(target, agent=args.agent)
-    elif args.cmd == "init":
-        result = commands.init(project_root=args.dir, agent=args.agent)
-    elif args.cmd == "confirm":
-        result = commands.confirm(args.text, scope=args.scope,
-                                  project=args.project, task_id=args.task_id,
-                                  evidence=args.evidence)
-    else:
-        result = {"ok": False, "error": f"unknown command {args.cmd}"}
+    try:
+        if args.cmd == "task":
+            result = commands.task(args.prompt, project=args.project,
+                                   session=args.session, resume=args.resume)
+        elif args.cmd == "retrieve":
+            result = commands.retrieve(args.prompt, project=args.project,
+                                       session=args.session)
+        elif args.cmd == "plan":
+            result = commands.plan(args.prompt, project=args.project,
+                                   steps=args.steps, acceptance=args.acceptance)
+        elif args.cmd == "settle":
+            candidates = [{"text": t} for t in args.text] if args.text else None
+            result = commands.settle(args.task_id, status=args.status,
+                                     output=args.output, candidates=candidates)
+        elif args.cmd == "checkpoint":
+            from xiaot import timeline
+            result = timeline.checkpoint(commands._resolve_root(), args.task_id,
+                                         label=args.label)
+        elif args.cmd == "timeline":
+            from xiaot import timeline
+            result = {"nodes": timeline.list_nodes(commands._resolve_root())}
+        elif args.cmd == "rollback":
+            from xiaot import timeline
+            result = timeline.rollback(commands._resolve_root(), args.node_id)
+        elif args.cmd == "inject":
+            from xiaot import inject
+            target = Path(args.dir) if args.dir else commands._resolve_root()
+            result = inject.generate(target, agent=args.agent)
+        elif args.cmd == "init":
+            result = commands.init(project_root=args.dir, agent=args.agent,
+                                   project_name=args.project)
+        elif args.cmd == "confirm":
+            result = commands.confirm(args.text, scope=args.scope,
+                                      project=args.project, task_id=args.task_id,
+                                      evidence=args.evidence)
+        else:
+            result = {"ok": False, "error": f"unknown command {args.cmd}"}
+    except ValueError as exc:
+        # domain validation errors -> JSON envelope, never a raw traceback
+        result = {"ok": False, "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001 - machine surface stays JSON
+        result = {"ok": False, "error": f"xiaot internal error: {exc}"}
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result.get("ok", True) else 1

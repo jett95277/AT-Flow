@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 import sys
 
+import yaml
+
 
 if sys.platform == "win32":
     # Windows 编码适配：直接显示时 conhost 按系统代码页（936/GBK）解码，
@@ -32,7 +34,9 @@ from xiaot_memory.memory import (
 from xiaot_memory.memory_context import build_memory_context
 from xiaot_memory.memory_events import list_actions
 from xiaot_memory.memory_policy import (
+    request_archive,
     request_conflict,
+    request_discard,
     request_promote,
     request_supersede,
     request_verify,
@@ -81,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
                          help="entry index within uri (default: newest)")
     discard.add_argument("--all", action="store_true",
                          help="apply to all entries of the uri")
+    discard.add_argument("--confirmed", action="store_true",
+                         help="required: discard is destructive")
     checkpoint = memory_sub.add_parser("checkpoint", help="create memory checkpoint")
     checkpoint.add_argument("label", help="checkpoint label")
     memory_sub.add_parser("timeline", help="list checkpoints")
@@ -150,6 +156,15 @@ def main(argv: list[str] | None = None) -> int:
         return _dispatch(args)
     except (ValueError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except yaml.YAMLError as exc:
+        print(f"error: memory data unreadable (YAML): {exc}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as exc:
+        print(f"error: memory data unreadable (JSON): {exc}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"error: filesystem: {exc}", file=sys.stderr)
         return 1
 
 
@@ -230,26 +245,35 @@ def _dispatch(args) -> int:
                 print("error: --index and --all are mutually exclusive", file=sys.stderr)
                 return 1
         if args.memory_command == "promote":
-            # 带严格标志（--confirmed/--evidence/--distilled）走治理层；否则 legacy 状态提升。
+            # 跨层（--to long/medium）promote 是治理动作，必须带严格标志
+            # （--confirmed/--evidence/--distilled）；无标志走 legacy 会绕过
+            # verify/准入链把未验证内容盖章入层，故跨层无标志一律拒绝。
             if args.to and (args.confirmed or args.evidence or args.distilled):
                 result = request_promote(
                     root, args.uri, args.to, index=args.index, all_=args.all,
                     confirmed=args.confirmed, evidence=args.evidence or None,
                     distilled=args.distilled,
                 )
+            elif args.to:
+                result = {"ok": False,
+                          "error": "cross-tier promote requires "
+                                   "--confirmed/--evidence/--distilled "
+                                   "(no silent legacy bypass of the "
+                                   "verification chain)"}
             else:
-                result = promote_memory(root, args.uri, to_tier=args.to,
+                result = promote_memory(root, args.uri,
                                         index=args.index, all_=args.all)
             print(json.dumps(result, ensure_ascii=False, indent=2))
-            return 0
+            return 0 if result.get("ok", True) else 1
         if args.memory_command == "archive":
-            result = archive_memory(root, args.uri, index=args.index, all_=args.all)
+            result = request_archive(root, args.uri, index=args.index, all_=args.all)
             print(json.dumps(result, ensure_ascii=False, indent=2))
-            return 0
+            return 0 if result.get("ok", True) else 1
         if args.memory_command == "discard":
-            result = discard_memory(root, args.uri, index=args.index, all_=args.all)
+            result = request_discard(root, args.uri, index=args.index, all_=args.all,
+                                     confirmed=args.confirmed)
             print(json.dumps(result, ensure_ascii=False, indent=2))
-            return 0
+            return 0 if result.get("ok", True) else 1
         if args.memory_command == "checkpoint":
             result = create_checkpoint(root, args.label)
             print(json.dumps(result, ensure_ascii=False, indent=2))

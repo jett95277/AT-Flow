@@ -3,7 +3,7 @@
 A model: memory = cross-session verified knowledge. Only medium{task,project}
 and long{global} are retrieved/injected; short process entries are excluded.
 In-flight state lives in workspace. Settling produces comparison suggestions
-(duplicate/supersede/conflict) for human approval - nothing auto-promotes.
+(duplicate/review with scope hints) for human approval - nothing auto-promotes.
 """
 
 from __future__ import annotations
@@ -131,6 +131,44 @@ def compare_candidates(root: Path, candidates: list[dict[str, Any]]) -> list[dic
                            else "topic conclusion -> task scope"),
             })
     return suggestions
+
+
+def confirm(root: Path, text: str, scope: str = "task",
+            project: str | None = None, task_id: str | None = None,
+            evidence: str | None = None) -> dict[str, Any]:
+    """Human-approved promotion into medium memory (manual gate).
+
+    A-model: nothing auto-promotes. After the human approves a settle
+    suggestion this writes a verified-style entry to the chosen scope
+    (task topic or project). Default MemoryService implementation.
+
+    task scope: `task_id` may be the full workspace id ("task-<topic>") or a
+    bare topic; the memory URI always uses the bare topic so retrieval
+    (candidate_uris) and writes share one namespace (file task-<topic>.md).
+    """
+    if scope not in ("task", "project"):
+        return {"ok": False, "error": "scope must be task or project"}
+    if scope == "task" and not task_id:
+        return {"ok": False, "error": "task scope needs task_id (topic)"}
+    if scope == "project" and not project:
+        return {"ok": False, "error": "project scope needs project"}
+    from xiaot_memory.memory import write_memory_structured
+
+    if scope == "task":
+        topic = task_id[len("task-"):] if str(task_id).startswith("task-") else task_id
+        if not topic:
+            return {"ok": False, "error": "task scope needs a non-empty topic"}
+        uri = f"memory://task/{topic}/medium"
+    else:
+        uri = f"memory://project/{project}/medium"
+    source = {"project": project} if scope == "project" else {}
+    if evidence:
+        source["evidence"] = evidence
+    if task_id:
+        source["task"] = task_id
+    item = write_memory_structured(root, uri, conclusion=text, source=source)
+    return {"ok": True, "uri": uri, "scope": scope, "content": text[:120],
+            "item": item}
 
 
 def suggest_settle(root: Path, task_id: str,

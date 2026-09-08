@@ -28,7 +28,6 @@ from xiaot_memory.memory import (
     read_memory,
     supersede_memory,
     verify_memory,
-    write_memory,
 )
 from xiaot_memory.memory_events import log_action
 from xiaot_memory.memory_models import (
@@ -79,11 +78,15 @@ def check_admission(
             )
     elif tier == "medium":
         # 直接写 medium 的三个例外；普通记忆必须来自 short（走 promote）。
-        if scope == "task" and kind == "conclusion":
+        # 注意：例外用 uri 的原始 scope（parse_uri），不是 derive_scope ——
+        # session 会被派生为 task，但那只是 short 的归属推导，不能因此把
+        # 任意 session 写 medium 也放行成"任务定义入口"。
+        raw_scope = scope_name
+        if raw_scope == "task" and kind == "conclusion" and (task_id or source.get("task")):
             pass  # 任务定义入口（目标/范围/验收），用户发起即视为已确认
-        elif scope == "project" and kind == "constraint" and confirmed:
+        elif raw_scope == "project" and kind == "constraint" and confirmed:
             pass  # 用户明确声明的项目级约束
-        elif scope == "global" and kind == "preference" and status == "candidate":
+        elif raw_scope == "global" and kind == "preference" and status == "candidate":
             pass  # Agent 推断的长期偏好，待用户确认
         else:
             raise MemoryPolicyError(
@@ -131,7 +134,14 @@ def check_transition(
             raise MemoryPolicyError(
                 "NOT_VERIFIABLE", f"status={entry.get('status')!r} 不可 verify"
             )
-        if not evidence and not confirmed and not legacy:
+        if legacy:
+            # legacy 旧格式无 evidence 字段：至少需用户确认补证（对齐 CLI
+            # 帮助 "user-confirmed（legacy 补证）"），不豁免一切。
+            if not confirmed:
+                raise MemoryPolicyError(
+                    "REQUIRES_CONFIRMATION", "legacy 条目 verify 需用户确认补证"
+                )
+        elif not evidence and not confirmed:
             raise MemoryPolicyError(
                 "VERIFY_REQUIRES_EVIDENCE", "verify 需证据或用户确认"
             )
@@ -239,6 +249,19 @@ def write_entry(
     source = source or {}
     supersedes_id = None
     if supersedes_uri:
+        # supersedes_id 字段方向（与 request_supersede 相反，两处都写注释防漂移）：
+        #  - write_entry：新条目 item["supersedes_id"] = 被它取代的旧条目 id
+        #    （"本条目取代 <id>"）
+        #  - request_supersede：发起方标记的是被取代条目，其 supersedes_id 指向替换者。
+        # 消费方须按"被标记条目视角"读字段：若条目 validity=superseded，其
+        # supersedes_id 是取代它的新条目；新条目上的 supersedes_id 才是它取代的旧条目。
+        src_scope, _, src_tier = parse_uri(uri)
+        dst_scope, _, dst_tier = parse_uri(supersedes_uri)
+        if src_scope != dst_scope or src_tier != dst_tier:
+            raise MemoryPolicyError(
+                "SUPERSEDE_SCOPE_MISMATCH",
+                f"supersede 需同 scope 同 tier：{uri} vs {supersedes_uri}",
+            )
         old = read_memory(root, supersedes_uri)
         if not old:
             raise FileNotFoundError(f"unknown supersedes target: {supersedes_uri}")
@@ -290,6 +313,16 @@ def request_promote(
 ) -> dict[str, Any]:
     if to_tier not in ("medium", "long"):
         raise MemoryPolicyError("UNKNOWN_TIER", f"unknown promote target: {to_tier!r}")
+    if all_ and distilled:
+        # distilled is a single rewritten conclusion; with --all there are
+        # multiple targets and no way to say which rewrite belongs to which
+        # entry. Reject rather than silently rewriting only the last one.
+        raise MemoryPolicyError(
+            "ALL_WITH_DISTILLED",
+            "--all promote cannot carry a single --distilled text; "
+            "promote entries one by one with distilled, or drop --distilled "
+            "for a bulk promote",
+        )
     entries = _load_raw(root, uri)
     if not entries:
         raise FileNotFoundError(f"unknown memory: {uri}")

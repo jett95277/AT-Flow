@@ -57,7 +57,9 @@ class ViewTests(unittest.TestCase):
 
 
 class CliMemoryTests(unittest.TestCase):
-    def test_cli_promote_accepts_uri_and_to(self):
+    def test_cli_promote_requires_governance_flags_for_cross_tier(self):
+        # C1 regression: cross-tier promote without strict flags must NOT
+        # silently bypass the verification chain via the legacy path.
         from xiaot_memory.cli import main
 
         with tempfile.TemporaryDirectory() as directory:
@@ -69,7 +71,19 @@ class CliMemoryTests(unittest.TestCase):
             old = os.getcwd()
             os.chdir(root)
             try:
-                code = main(["memory", "promote", "memory://session/A/short", "--to", "medium"])
+                # no flags -> rejected, no file written
+                code = main(["memory", "promote", "memory://session/A/short",
+                             "--to", "medium"])
+            finally:
+                os.chdir(old)
+            self.assertEqual(code, 1)
+            self.assertFalse((root / ".agent/memory/medium/task-T17.md").exists())
+            os.chdir(root)
+            try:
+                # with strict flags -> governed promote succeeds
+                code = main(["memory", "promote", "memory://session/A/short",
+                             "--to", "medium", "--confirmed", "--distilled",
+                             "refined note", "--evidence", "test:note"])
             finally:
                 os.chdir(old)
             self.assertEqual(code, 0)

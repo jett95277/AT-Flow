@@ -16,16 +16,15 @@ from typing import Any
 
 
 def _spec_cli() -> str | None:
-    """Locate the spec CLI binary (env override > PATH > known install)."""
+    """Locate the spec CLI binary (env override > PATH).
+
+    No machine-specific fallback paths here: SPEC_CLI env var or an `openspec`
+    executable on PATH is the contract. Installers add it to PATH.
+    """
     env = os.environ.get("SPEC_CLI")
     if env and Path(env).exists():
         return env
-    found = shutil.which("openspec")
-    if found:
-        return found
-    # fallback: fnm-managed install observed on this machine
-    known = Path.home() / "AppData/Roaming/fnm/node-versions/v24.14.1/installation/openspec.cmd"
-    return str(known) if known.exists() else None
+    return shutil.which("openspec")
 
 
 def available() -> bool:

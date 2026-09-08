@@ -1,7 +1,7 @@
 """三层记忆治理：枚举、字段校验与最小模型（纯数据层，不碰存储）。
 
 - 定义 tier / scope / status / validity / kind 的允许值与枚举。
-- 提供 uri 解析的权威实现（与 memory._parse_uri 逻辑一致）。
+- 提供 uri 解析的权威实现（parse_uri，memory.py 以 `parse_uri as _parse_uri` 复用本函数）。
 - 构造新格式 entry（make_entry）。
 - 旧数据水合（hydrate_entry）：读取时补默认值副本，绝不改写原 dict、绝不写盘。
 """

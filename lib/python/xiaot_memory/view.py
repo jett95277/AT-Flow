@@ -76,7 +76,8 @@ def render_memory_export(root: Path, include_all: bool = False) -> str:
 def render_memory_stats(root: Path, include_all: bool = False) -> dict:
     from xiaot_memory.timeline import list_checkpoints
 
-    statuses = ("candidate", "active", "archived", "deprecated")
+    statuses = ("candidate", "active", "verified", "conflicted",
+                "archived", "deprecated")
     tiers: dict[str, dict[str, int]] = {}
     total = 0
     for tier in ("short", "medium", "long"):
@@ -84,7 +85,11 @@ def render_memory_stats(root: Path, include_all: bool = False) -> dict:
         counts = {status: 0 for status in statuses}
         for entry in entries:
             status = entry.get("status", "candidate")
-            counts[status if status in counts else "candidate"] += 1
+            if status in counts:
+                counts[status] += 1
+            else:
+                counts.setdefault("unknown", 0)
+                counts["unknown"] += 1
         counts["total"] = len(entries)
         tiers[tier] = counts
         total += len(entries)

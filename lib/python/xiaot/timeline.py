@@ -29,7 +29,20 @@ def _tl_dir(root: Path) -> Path:
 
 
 def _node_dir(root: Path, node_id: str) -> Path:
+    _check_node_id(node_id)
     return _tl_dir(root) / node_id
+
+
+# node ids are embedded in a filesystem path (.xiaot/timeline/<id>/); reject
+# anything that could escape (path separators, "..", leading dots). ids are
+# generated as f"{ts}-{slug}" (alnum + '-' + '_').
+_NODE_ID_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_-]*$")
+
+
+def _check_node_id(node_id: str) -> None:
+    if not isinstance(node_id, str) or not _NODE_ID_RE.match(node_id):
+        raise ValueError(
+            f"invalid timeline node id {node_id!r}: must match {_NODE_ID_RE.pattern!r}")
 
 
 def checkpoint(root: Path, task_id: str, label: str | None = None) -> dict[str, Any]:
@@ -79,7 +92,10 @@ def rollback(root: Path, node_id: str) -> dict[str, Any]:
     """Restore task workspace from a snapshot node."""
     from xiaot import workspace as ws
 
-    node = _node_dir(root, node_id)
+    try:
+        node = _node_dir(root, node_id)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
     if not node.exists():
         return {"ok": False, "error": f"timeline node {node_id} not found"}
     meta = json.loads((node / "meta.json").read_text(encoding="utf-8"))

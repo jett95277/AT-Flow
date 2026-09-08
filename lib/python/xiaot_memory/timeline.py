@@ -17,6 +17,21 @@ def _safe_label(label: str) -> str:
     return safe or "checkpoint"
 
 
+# node ids are embedded in a filesystem path (.agent/timeline/<id>/); reject
+# anything that could escape the timeline tree ("..", separators, dots).
+_NODE_ID_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_-]*$")
+
+
+def _node_dir(root: Path, node_id: str) -> Path:
+    if not isinstance(node_id, str) or not _NODE_ID_RE.match(node_id):
+        raise ValueError(
+            f"invalid checkpoint node id {node_id!r}: must match {_NODE_ID_RE.pattern!r}")
+    d = root / ".agent" / "timeline" / node_id
+    if not d.is_dir() or not (d / "meta.yaml").is_file():
+        raise FileNotFoundError(f"unknown checkpoint: {node_id}")
+    return d
+
+
 def create_checkpoint(root: Path, label: str) -> dict[str, Any]:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     node_id = f"{ts}-{_safe_label(label)}"
@@ -55,9 +70,7 @@ def list_checkpoints(root: Path) -> list[dict[str, Any]]:
 
 
 def rollback_memory(root: Path, node_id: str) -> dict[str, Any]:
-    node_dir = root / ".agent/timeline" / node_id
-    if not node_dir.exists():
-        raise FileNotFoundError(f"unknown checkpoint: {node_id}")
+    node_dir = _node_dir(root, node_id)  # validates id + direct child + meta.yaml
     create_checkpoint(root, f"pre-rollback-{node_id}")
     for tier, relative in TIER_DIRS.items():
         target = root / ".agent" / relative

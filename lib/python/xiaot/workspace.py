@@ -8,9 +8,19 @@ the resume source and is kept separate from the memory store (.agent/).
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
+import re
 from pathlib import Path
 from typing import Any
+
+# task ids are embedded in a filesystem path (.xiaot/workspace/<id>/); reject
+# anything that could escape the task directory (path separators, "..", dots).
+_TASK_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+
+
+def _check_task_id(task_id: str) -> None:
+    if not isinstance(task_id, str) or not _TASK_ID_RE.match(task_id):
+        raise ValueError(
+            f"invalid task id {task_id!r}: must match {_TASK_ID_RE.pattern!r}")
 
 
 def xiaot_root(root: Path) -> Path:
@@ -22,12 +32,14 @@ def xiaot_root(root: Path) -> Path:
 
 def workspace_dir(root: Path, task_id: str) -> Path:
     """Return (and create) workspace dir for a task."""
+    _check_task_id(task_id)
     w = xiaot_root(root) / "workspace" / task_id
     w.mkdir(parents=True, exist_ok=True)
     return w
 
 
 def workspace_exists(root: Path, task_id: str) -> bool:
+    _check_task_id(task_id)
     return (xiaot_root(root) / "workspace" / task_id).exists()
 
 
@@ -75,6 +87,7 @@ def write_context_snapshot(root: Path, task_id: str, context: dict[str, Any]) ->
 
 def read_workspace(root: Path, task_id: str) -> dict[str, Any]:
     """Read task state for resume: plan.json + result + context if present."""
+    _check_task_id(task_id)
     w = xiaot_root(root) / "workspace" / task_id
     state: dict[str, Any] = {"task_id": task_id, "dir": str(w)}
     for name in ("plan.json", "context.json"):
@@ -89,3 +102,52 @@ def read_workspace(root: Path, task_id: str) -> dict[str, Any]:
 def list_workspaces(root: Path) -> list[str]:
     d = xiaot_root(root) / "workspace"
     return sorted(p.name for p in d.iterdir() if p.is_dir()) if d.exists() else []
+
+
+_PROJECT_NAME_FILE = "project.json"
+
+
+def read_result_status(root: Path, task_id: str) -> str | None:
+    """Read the outcome status from result.md (- status: <value>).
+
+    Single read point for the result.md line format (writer is write_result);
+    parse errors return None rather than raising.
+    """
+    _check_task_id(task_id)
+    p = xiaot_root(root) / "workspace" / task_id / "result.md"
+    if not p.exists():
+        return None
+    try:
+        text = p.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            if line.strip().startswith("- status:"):
+                return line.split(":", 1)[1].strip()
+    except Exception:
+        return None
+    return None
+
+
+def write_project_name(root: Path, name: str) -> Path:
+    """Persist the canonical project name (.xiaot/project.json).
+
+    Cross-session memory injection keys on the project name; pinning it once
+    (at `xiaot init`) stops drift where different sessions use slightly
+    different names and never see each other's memory.
+    """
+    p = xiaot_root(root) / _PROJECT_NAME_FILE
+    p.write_text(json.dumps({"name": name}, ensure_ascii=False, indent=2),
+                 encoding="utf-8")
+    return p
+
+
+def read_project_name(root: Path) -> str | None:
+    """Read the pinned project name; None when never initialized."""
+    p = xiaot_root(root) / _PROJECT_NAME_FILE
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        name = data.get("name")
+        return str(name) if name else None
+    except Exception:
+        return None

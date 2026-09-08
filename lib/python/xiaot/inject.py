@@ -56,8 +56,15 @@ context fragment. "带记忆开工、留记忆收工" is the loop:
    Returns JSON: task_id, workspace, memory (injected summaries), context
    fragment (instruction + memory_summary + refs). Empty memory on a fresh
    project is fine - proceed.
+   Project name discipline: use ONE canonical `--project` value for the whole
+   project (default = the directory name reported by `xiaot init`). Never
+   invent variants - memory injection keys on the project name across
+   sessions, so a drifted name makes memory invisible.
 2. **Execute**: follow `context.instruction`; use relevant memory_summary
    items. Need more context mid-task? Call `xiaot retrieve "<need>" --project X`.
+   Large task flagged by `spec.needs_spec`? Its `spec.guidance` says whether to
+   run the spec workflow first; the flag is advice, never a blocker - proceed
+   on the base path if the spec workflow is overkill for this task.
 3. **Milestones**: `xiaot checkpoint <task_id> --label X` at key nodes.
 4. **Finish**: after completing call
    `xiaot settle <task_id> --status success --output "<summary>" [--text "<candidate>"]...`

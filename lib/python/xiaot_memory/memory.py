@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 from pathlib import Path
+import tempfile
 from typing import Any
 
 import yaml
@@ -201,7 +203,14 @@ def verify_memory(
     entry = entries[resolved]
     entry["status"] = "verified"
     if evidence:
-        entry["evidence"] = list(evidence)
+        # merge with existing evidence instead of overwriting: repeated
+        # verifies accumulate provenance (check layer already combines).
+        existing = [str(e) for e in (entry.get("evidence") or [])]
+        merged: list[str] = []
+        for e in [*existing, *[str(x) for x in evidence]]:
+            if e not in merged:
+                merged.append(e)
+        entry["evidence"] = merged
     entry["updated_at"] = datetime.now(timezone.utc).isoformat()
     _save_entries(path, entries)
     return entry
@@ -309,11 +318,19 @@ def _load_entries(path: Path) -> list[dict[str, Any]]:
 
 
 def _save_entries(path: Path, entries: list[dict[str, Any]]) -> None:
-    # issue-4：原子写入（临时文件 + rename），降低并发 read-modify-write 覆盖风险。
+    # issue-4：原子写入。用唯一临时文件（同目录）避免并发进程在同一个
+    # ".tmp" 上互相截断/rename，最后以 os.replace 原子落位。
     # 注：非全量并发安全（无文件锁），串行约束见 AGENTS.md「记忆约定」。
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
-        yaml.safe_dump_all(entries, allow_unicode=True, sort_keys=False),
-        encoding="utf-8",
-    )
-    tmp.replace(path)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=path.stem + "-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            yaml.safe_dump_all(entries, allow_unicode=True, sort_keys=False,
+                               stream=handle)
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
