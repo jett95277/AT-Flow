@@ -1,6 +1,6 @@
 # 小T（Xiaot）
 
-**Codex / OpenCode 通用的个人 AI 助手系统（v3.1：完全自包含，记忆引擎内迁）。**
+**Codex / OpenCode 通用的个人 AI 助手系统（v3.0：记忆引擎内迁 + 任务编排 Orchestrator MVP）。**
 >claude没顺手改是因为目前在家里用codex比较多，在公司用opencode，后期顺手加上claude，或者说使用者稍微写一段prompt就能适配
 
 小T不是产品，不做面向用户的多余内容。系统要能跑、
@@ -12,6 +12,12 @@
 v3.1 起小T **完全独立**：三层记忆引擎已内迁为 `xiaot_memory` 模块，
 基于 Codex / OpenCode 通用机制
 实现（AGENTS.md + SKILL.md + 薄记忆命令），同一套文件双生态可用。
+
+v3.0 起小T 在记忆层之上新增**任务编排层**（`lib/python/xiaot/` 编排 CLI，对齐
+spec-driven 设计）：注入 Coding Agent（opencode 等），开发任务先经
+`xiaot task` 编排（带记忆开工）→ 执行 → `xiaot settle`/`confirm`（留记忆
+收工，全人工确认），使小T 从"人设/记忆工具"升级为"agent 上层任务编排平台"。
+（详见下方「任务编排 CLI」节与 `ARCHITECTURE-v3.md`）
 
 核心问题只有一个：
 > 让人（和 Agent）清楚地看到当前记住了什么，并能随时查看、写入、提升、回滚。
@@ -42,6 +48,7 @@ v3.1 起小T **完全独立**：三层记忆引擎已内迁为 `xiaot_memory` �
 | 规则层 | `AGENTS.md` | 12 条规则 + 权限管理 + Git 工作流 |
 | 定位层 | `lib/xiaot-env.ps1` + `bin/xiaot-memory.ps1` | 统一解析 XIAOT_HOME / ProjectRoot / python / 记忆命令 |
 | 记忆层 | `lib/python/xiaot_memory/` | 内迁记忆引擎（三层记忆 + 治理层，复用 AT 语义） |
+| 编排层 | `lib/python/xiaot/`（v3.0） | 任务编排 CLI：task/retrieve/settle/confirm/checkpoint/inject（对齐 spec-driven） |
 | 人设层 | `personas/*.md` | 全局/研发/产品三模式（charter 化） |
 | SOP 层 | `skills/`（13 个 skill） | 自有 7 个 + 现成引入 6 个 |
 | 路由层 | `routing.md` | 触发词→skill 路由 + 降级规则 |
@@ -62,9 +69,15 @@ xiaot/
 ├── lib/
 │   ├── xiaot-env.ps1       # 定位层：导出 $Xiaot（MemoryCmd / PythonExe / ProjectRoot）
 │   └── python/
-│       └── xiaot_memory/   # 记忆引擎（内迁：memory/policy/settle/context/events/timeline/view）
+│       ├── xiaot_memory/   # 记忆引擎（内迁：memory/policy/settle/context/events/timeline/view）
+│       └── xiaot/          # 编排层（v3.0）：models/workspace/memory_service/skill_router/
+│                           #   spec_router/spec_adapter/context/commands/timeline/inject/cli
 ├── bin/
-│   └── xiaot-memory.ps1    # 薄记忆命令入口（python -m xiaot_memory）
+│   ├── xiaot-memory.ps1    # 薄记忆命令入口（python -m xiaot_memory）
+│   ├── xiaot.ps1 / xiaot.cmd  # 编排 CLI 入口（python -m xiaot，PATH 可调）
+│   └── setup-xiaot.ps1     # 一键部署（加入 PATH + 自检）
+├── docs/
+│   └── TASKBOOK-v3.0-orchestrator.md  # 编排平台开发任务书
 ├── personas/               # 人设层（charter 化）
 │   ├── persona_global.md   # 全局人设
 │   ├── persona_dev.md      # 研发人设
