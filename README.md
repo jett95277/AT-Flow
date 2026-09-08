@@ -62,10 +62,13 @@ spec-driven 设计）：注入 Coding Agent（opencode 等），开发任务先�
 xiaot/
 ├── AGENTS.md               # 规则层（Codex / OpenCode 通用）
 ├── routing.md              # 路由层：触发词→skill 表 + 降级规则
+├── ARCHITECTURE-v3.md      # 架构设计（v3.0 编排平台基线）
 ├── DEPLOY.md               # 部署文档（独立仓库 clone 即用）
 ├── sync-skills.ps1         # 一键同步 skills + 部署 ~/.xiaot 安装根
 ├── tui.ps1                 # 状态面板（交互 + text 双模式）
 ├── doctor.ps1              # 路径诊断（python + 记忆自检 + skills 部署）
+├── openspec/               # spec-driven 工作区（specs=真相对外文档；changes/archive=演进历史）
+├── tests/                  # 130 单测（记忆引擎 + 编排层）
 ├── lib/
 │   ├── xiaot-env.ps1       # 定位层：导出 $Xiaot（MemoryCmd / PythonExe / ProjectRoot）
 │   └── python/
