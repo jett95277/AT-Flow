@@ -139,6 +139,41 @@ medium（需证据 + 重提炼 + 确认）→ long（需 verified + 项目归属
 
 short 无 `--task`、medium 缺证据/未提炼/未确认、技术事实直写 long，都会被准入规则拒绝。
 
+## 任务编排 CLI（v3.0，Orchestrator MVP）
+
+xiaot 在记忆层之上新增**任务编排层**：面向 Coding Agent 的编排 CLI（对齐 spec-driven 设计），带记忆开工、留记忆收工。详见 `docs/TASKBOOK-v3.0-orchestrator.md` 与 `ARCHITECTURE-v3.md`。
+
+### 快速开始
+
+```powershell
+# 1) 部署：加入 PATH（新终端生效）
+powershell -ExecutionPolicy Bypass -File xiaot\bin\setup-xiaot.ps1
+
+# 2) 项目初始化（建 .xiaot 工作区 + 注入 .opencode 编排命令/skill）
+xiaot init --dir <项目路径>
+
+# 3) 编排任务（agent 会话内，按 xiaot-orchestrate skill 自动走）
+xiaot task "开发任务描述" --project X      # 带记忆开工，返回 context 片段
+xiaot settle <task_id> --status success --output "<做了什么>" --text "<候选结论>"   # 收工沉淀建议
+xiaot confirm "<结论>" --scope project --project X --evidence "<证据>"  # 人工确认写入 medium
+```
+
+### 命令一览
+
+| 命令 | 作用 |
+|---|---|
+| `task` | 启动/恢复任务闭环（workspace 落盘 + 记忆注入 + context 片段 JSON）|
+| `retrieve` | 中途补查任务相关记忆（A 模型：medium/long，引用式）|
+| `plan` | 产出并落盘规划文档 |
+| `settle` | 收工沉淀：与既有记忆比对 → duplicate/review + scope 建议（**全人工**）|
+| `confirm` | 人工确认后把结论写入 medium（task/project scope）——记忆闭环的写入口 |
+| `checkpoint` / `timeline` / `rollback` | 任务时间线（workspace+记忆快照）/列表/恢复 |
+| `inject` / `init` | 注入编排命令到 agent 目录 / 一键项目初始化 |
+
+### 真实会话闭环（已验证）
+
+在 opencode 会话中输入开发任务，agent 按 `xiaot-orchestrate` 驱动：先 `xiaot task` 拿 context → 执行 → `xiaot checkpoint` 里程碑 → 完成后 `xiaot settle` 出建议 → 你 `xiaot confirm` 落 medium → 下次同项目任务自动注入。内存闭环已实测：settle→confirm 写入→下任务 retrieve 注入到。
+
 ## 边界（诚实声明）
 
 - 不依赖外部路由数据库（`routing.md` 做触发词路由，记忆做索引）

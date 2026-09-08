@@ -46,6 +46,58 @@ def _resolve_root() -> Path:
     return Path.cwd()
 
 
+# ---- init: initialize a project for xiaot orchestration ------------------
+def init(project_root: str | Path | None = None,
+         agent: str = "opencode") -> dict[str, Any]:
+    """One-command project init: create .xiaot workspace + inject agent dir.
+
+    Usage: xiaot init --dir <project>   (or in a project dir: xiaot init)
+    """
+    root = Path(project_root) if project_root else _resolve_root()
+    root = root.resolve()
+    if not root.exists():
+        return {"ok": False, "error": f"project dir not found: {root}"}
+    # 1) .xiaot/workspace
+    ws = workspace.xiaot_root(root)
+    (ws / "workspace").mkdir(parents=True, exist_ok=True)
+    # 2) inject orchestration commands/skill
+    from xiaot import inject
+    inj = inject.generate(root, agent=agent)
+    return {"ok": True, "project": str(root),
+            "workspace_dir": str(ws / "workspace"),
+            "inject": inj,
+            "note": "remember to gitignore .xiaot/ and .opencode/ (or commit the injected files)"}
+
+
+# ---- confirm: human-approved promotion into medium memory (settle close) --
+def confirm(text: str, scope: str = "task", project: str | None = None,
+            task_id: str | None = None, evidence: str | None = None,
+            root: Path | None = None) -> dict[str, Any]:
+    """After the human approves a settle suggestion, write it into medium.
+
+    A-model: promotions are manual - this command is the manual gate. Writes
+    a verified-style entry to the chosen scope (task topic or project).
+    """
+    root = root or _resolve_root()
+    if scope not in ("task", "project"):
+        return {"ok": False, "error": "scope must be task or project"}
+    if scope == "task" and not task_id:
+        return {"ok": False, "error": "task scope needs --task-id (topic)"}
+    if scope == "project" and not project:
+        return {"ok": False, "error": "project scope needs --project"}
+    from xiaot_memory.memory import write_memory_structured
+    uri = (f"memory://task/{task_id}/medium" if scope == "task"
+           else f"memory://project/{project}/medium")
+    source = {"project": project} if scope == "project" else {}
+    if evidence:
+        source["evidence"] = evidence
+    if task_id:
+        source["task"] = task_id
+    item = write_memory_structured(root, uri, conclusion=text, source=source)
+    return {"ok": True, "uri": uri, "scope": scope, "content": text[:120],
+            "item": item}
+
+
 # ---- task: start or resume the closed loop ---------------------------------
 def task(prompt: str, project: str | None = None, session: str | None = None,
          resume: str | None = None, budget: int = 5,

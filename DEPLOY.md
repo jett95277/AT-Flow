@@ -87,6 +87,21 @@ pwsh ~\.xiaot\bin\xiaot-memory.ps1 memory view
 pwsh sync-skills.ps1
 ```
 
+## 任务编排 CLI（v3.0）部署
+
+编排包在 `lib/python/xiaot/`（与 xiaot_memory 并列）。部署与使用：
+
+```powershell
+# 1) 加入 PATH（setup-xiaot.ps1 处理 bin\xiaot.cmd，含 PYTHONPATH）
+powershell -ExecutionPolicy Bypass -File xiaot\bin\setup-xiaot.ps1
+
+# 2) 在目标项目初始化（建 .xiaot 工作区 + 注入 .opencode 编排命令/skill）
+xiaot init --dir <项目>
+
+# 3) 编排任务（详见 README「任务编排 CLI」节）
+xiaot task "开发任务" --project X
+```
+
 ## 常用运维
 
 | 操作 | 命令 |
@@ -97,6 +112,7 @@ pwsh sync-skills.ps1
 | 记忆导出 | `& $Xiaot.MemoryCmd memory export`（项目根执行） |
 | 覆盖 python | 设环境变量 `XIAOT_PYTHON`（需带 PyYAML） |
 | 记忆自检 | `powershell -File ~\.xiaot\bin\doctor.ps1` |
+| 编排任务 | `xiaot task "..." --project X`（见 README 编排节） |
 
 ## 常见问题
 

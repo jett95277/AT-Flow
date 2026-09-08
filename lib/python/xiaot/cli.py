@@ -55,6 +55,17 @@ def main(argv: list[str] | None = None) -> int:
     p_inj.add_argument("--agent", default="opencode", help="agent config dir name")
     p_inj.add_argument("--dir", default=None, help="target project root (default resolved root)")
 
+    p_init = sub.add_parser("init", help="one-command project init (.xiaot + inject)")
+    p_init.add_argument("--dir", default=None, help="project root to initialize")
+    p_init.add_argument("--agent", default="opencode")
+
+    p_cf = sub.add_parser("confirm", help="human-approved promotion into medium memory")
+    p_cf.add_argument("text", help="conclusion text to persist")
+    p_cf.add_argument("--scope", choices=["task", "project"], default="task")
+    p_cf.add_argument("--project", default=None)
+    p_cf.add_argument("--task-id", default=None, help="task topic for task scope")
+    p_cf.add_argument("--evidence", default=None)
+
     args = parser.parse_args(argv)
     from xiaot import commands
 
@@ -85,6 +96,12 @@ def main(argv: list[str] | None = None) -> int:
         from xiaot import inject
         target = Path(args.dir) if args.dir else commands._resolve_root()
         result = inject.generate(target, agent=args.agent)
+    elif args.cmd == "init":
+        result = commands.init(project_root=args.dir, agent=args.agent)
+    elif args.cmd == "confirm":
+        result = commands.confirm(args.text, scope=args.scope,
+                                  project=args.project, task_id=args.task_id,
+                                  evidence=args.evidence)
     else:
         result = {"ok": False, "error": f"unknown command {args.cmd}"}
 
